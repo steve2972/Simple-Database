@@ -1,6 +1,5 @@
 #ifndef __BPT_H__
 #define __BPT_H__
-
 // Uncomment the line below if you are compiling on Windows.
 #define WINDOWS
 #include <stdio.h>
@@ -11,15 +10,12 @@
 #define false 0
 #define true 1
 #endif
-
 // Default order is 4.
 #define DEFAULT_ORDER 4
-
 // Minimum order is necessarily 3.  We set the maximum
 // order arbitrarily.  You may change the maximum order.
 #define MIN_ORDER 3
 #define MAX_ORDER 20
-
 // Constants for printing part or all of the GPL license.
 #define LICENSE_FILE "LICENSE.txt"
 #define LICENSE_WARRANTEE 0
@@ -28,9 +24,7 @@
 #define LICENSE_CONDITIONS 1
 #define LICENSE_CONDITIONS_START 70
 #define LICENSE_CONDITIONS_END 625
-
 // TYPES.
-
 /* Type representing the record
  * to which a given key refers.
  * In a real B+ tree system, the
@@ -44,7 +38,6 @@
 typedef struct record {
     int value;
 } record;
-
 /* Type representing a node in the B+ tree.
  * This type is general enough to serve for both
  * the leaf and the internal node.
@@ -81,9 +74,7 @@ typedef struct node {
     int num_keys;
     struct node * next; // Used for queue.
 } node;
-
 // GLOBALS.
-
 /* The order determines the maximum and minimum
  * number of entries (keys and pointers) in any
  * node.  Every node has at most order - 1 keys and
@@ -95,26 +86,20 @@ typedef struct node {
  * default value.
  */
 extern int order;
-
 /* The queue is used to print the tree in
  * level order, starting from the root
  * printing each entire rank on a separate
  * line, finishing with the leaves.
  */
 extern node * queue;
-
 /* The user can toggle on and off the "verbose"
  * property, which causes the pointer addresses
  * to be printed out in hexadecimal notation
  * next to their corresponding keys.
  */
 extern bool verbose_output;
-
-
 // FUNCTION PROTOTYPES.
-
 // Output and utility.
-
 void license_notice( void );
 void print_license( int licence_part );
 void usage_1( void );
@@ -133,9 +118,7 @@ int find_range( node * root, int key_start, int key_end, bool verbose,
 node * find_leaf( node * root, int key, bool verbose );
 record * find( node * root, int key, bool verbose );
 int cut( int length );
-
 // Insertion.
-
 record * make_record(int value);
 node * make_node( void );
 node * make_leaf( void );
@@ -152,9 +135,7 @@ node * insert_into_parent(node * root, node * left, int key, node * right);
 node * insert_into_new_root(node * left, int key, node * right);
 node * start_new_tree(int key, record * pointer);
 node * insert( node * root, int key, int value );
-
 // Deletion.
-
 int get_neighbor_index( node * n );
 node * adjust_root(node * root);
 node * coalesce_nodes(node * root, node * n, node * neighbor,
@@ -164,8 +145,6 @@ node * redistribute_nodes(node * root, node * n, node * neighbor,
         int k_prime_index, int k_prime);
 node * delete_entry( node * root, node * n, int key, void * pointer );
 node * delete( node * root, int key );
-
 void destroy_tree_nodes(node * root);
 node * destroy_tree(node * root);
-
 #endif /* __BPT_H__*/
