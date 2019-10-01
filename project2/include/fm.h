@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+extern FILE * file;
+
 typedef uint64_t pagenum_t; //pagenum_t size of 8 bytes
 
 typedef struct HeaderPage {
@@ -76,13 +78,5 @@ void file_read_page(pagenum_t pagenum, page_t* dest);
 // Writer function
     // Write an in-memory page(src) to the on-disk page
 void file_write_page(pagenum_t pagenum, const page_t* src);
-    // Write new page header (for leaf and internal pages)
-void file_write_PageHeader(page_t * page, pagenum_t freepage, pagenum_t reserved, int isLeaf, int num);
-    // Write new page entry (for internal pages)
-void file_write_entry(page_t * page, pagenum_t key, pagenum_t value);
-    // Write new page record (for leaf pages)
-void file_write_record(page_t * page, pagenum_t key, char * value);
-
-
 
 #endif /*__FM_H__*/
