@@ -6,15 +6,12 @@ SRCDIR=src/
 INC=include/
 LIBS=lib/
 
-# SRCS:=$(wildcard src/*.c)
-# OBJS:=$(SRCS:.c=.o)
-
 # main source file
 TARGET_SRC:=$(SRCDIR)main.c
 TARGET_OBJ:=$(SRCDIR)main.o
 
 # Include more files if you write another source file.
-SRCS_FOR_LIB:=$(SRCDIR)bpt.c
+SRCS_FOR_LIB:=$(filter-out src/main.c, $(wildcard src/*.c))
 OBJS_FOR_LIB:=$(SRCS_FOR_LIB:.c=.o)
 
 CFLAGS+= -g -fPIC -I $(INC)
@@ -23,6 +20,7 @@ TARGET=main
 
 all: $(TARGET)
 
+# Make Recipes
 $(TARGET): $(TARGET_OBJ)
 	$(CC) $(CFLAGS) -o $(OBJS_FOR_LIB) -c $(SRCS_FOR_LIB)
 	make static_library
