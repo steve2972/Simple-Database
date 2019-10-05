@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "fm.h": "c",
+        "dbm.h": "c"
+    }
+}
