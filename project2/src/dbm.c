@@ -23,14 +23,21 @@ int open_table(char* pathname) {
         else if (_root > 0) {
             root_page = getRootPage(&head);
         }
+        page_t test;
+        READ(test, 4096);
+        printf("Hello again: %ld\n", test.fp.NextFreePage);
+
         return 1;
     }
     else {
         // Initialize header and write to file
         head = createHeaderPage();
+        page_t test;
+        READ(test, 0);
+        printf("Greetings! %ld %ld\n", test.hp.numPages, test.hp.freePage);
+
         return 1;
     }
-
     // Return -1 if the file could not be opened, or if the header page
     // could not be found
     return -1;

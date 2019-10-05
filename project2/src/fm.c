@@ -3,13 +3,16 @@ int file;
 // Initializers
 int openDB(char * pathname) {
     // There are 2 cases when trying to open a file
-
-    // Case 1: No file exists
-    if (file != 0) {
-        return 1; // Already exists!
+    if (access(pathname, F_OK) != -1) {
+        // file exists
+        file = open(pathname, O_RDWR);
+        return 1;
     }
-    file = open(pathname, O_RDWR | O_CREAT, 0644);
-    return 0;
+    else {
+        // file does not exist
+        file = open(pathname, O_RDWR | O_CREAT, 0777);
+        return 0;
+    }    
 }
 
 page_t createHeaderPage() {
