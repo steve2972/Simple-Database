@@ -1,6 +1,17 @@
 #include "fm.h"
-
+int file;
 // Initializers
+int openDB(char * pathname) {
+    // There are 2 cases when trying to open a file
+
+    // Case 1: No file exists
+    if (file != 0) {
+        return 1; // Already exists!
+    }
+    file = open(pathname, O_RDWR | O_CREAT, 0644);
+    return 0;
+}
+
 page_t createHeaderPage() {
     // If file is empty, create a header page and allocate a free page
     page_t header;
@@ -52,4 +63,23 @@ void file_read_page(pagenum_t pagenum, page_t* dest) {
 // Write an in-memory page(src) to the on-disk page
 void file_write_page(pagenum_t pagenum, const page_t* src) {
     
+}
+
+// Header Page
+    // Getters
+
+page_t getHeaderPage() {
+    page_t head;
+    READ(head, 0);
+    return head;
+}
+
+page_t getRootPage(page_t * header) {
+    page_t root;
+    READ(root, PAGEOFFSET(header->hp.rootPage));
+    return root;
+}
+
+offset_t getFreePageOffset(page_t * header) {
+    return header->hp.freePage;
 }

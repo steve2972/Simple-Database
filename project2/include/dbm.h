@@ -5,6 +5,8 @@
 #include "fm.h"
 #include "bpt.h"
 
+extern page_t head;
+extern page_t root_page;
 
 int open_table(char* pathname);
 int db_insert(int64_t key, char* value);

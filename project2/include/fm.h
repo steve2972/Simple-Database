@@ -12,6 +12,8 @@
 // system call header files
 #include <sys/types.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #define INTERNAL_ORDER 249
 #define LEAF_ORDER 31
@@ -94,8 +96,15 @@ typedef struct page_t {
 * The following are the API's used to access, read and modify files
 */
 
-#define READ(buf, offset) (pread(file, &(buf), PAGESIZE, offset))
-#define WRITE(buf, offset) (pwrite(file, &(buf), PAGESIZE, offset))
+#define READ(buf, offset) (pread(file, &(buf), PAGE_SIZE, offset))
+#define WRITE(buf, offset) (pwrite(file, &(buf), PAGE_SIZE, offset))
+#define PAGEOFFSET(offset) (offset * sizeof(page_t))
+
+// Initializers
+int openDB(char * pathname);
+
+page_t createHeaderPage();
+page_t createFreePage(pagenum_t offset, pagenum_t nextFreePage);
 
 // Free an on-disk page to the free page list
 void file_free_page(pagenum_t pagenum);
@@ -116,6 +125,9 @@ void file_write_record(page_t * page, pagenum_t key, char * value);
 
 // Header Page
     // Getters
+page_t getHeaderPage();
+page_t getRootPage(page_t * header);
+
 offset_t getFreePageOffset(page_t * page);
 offset_t getRootPageOffset(page_t * page);
 pagenum_t getNumPages(page_t * page);

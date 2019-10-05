@@ -1,10 +1,12 @@
-#include "bpt.h"
-#include "fm.h"
-
-// MAIN
+#include "dbm.h"
 
 int main( int argc, char ** argv ) {
+    open_table("test.db");
 
+    
+}
+
+/*
     char * input_file;
     FILE * fp;
     node * root;
@@ -98,4 +100,4 @@ int main( int argc, char ** argv ) {
     printf("\n");
 
     return EXIT_SUCCESS;
-}
+    */
