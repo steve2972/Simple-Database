@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 // system call header files
 #include <sys/types.h>
@@ -21,6 +22,8 @@
 #define PAGE_SIZE 4096
 
 extern int file;
+extern page_t header;   // file and header are necessary when reading,
+                        // so, cache them!
 
 /*
 * Type definitions of the most commonly used Bytes
@@ -57,26 +60,24 @@ typedef struct PageHeader {
 } PageHeader;
 
 typedef struct Record {
-    pagenum_t key; //data[0] = key, rest is value
+    keyNum key; //data[0] = key, rest is value
     char value[120];
     //31 records go in leaf page
 } Record;
 
-typedef struct entry {
+typedef struct Entry {
     keyNum key;
     offset_t page;
     //248 entries go into internal page
-} entry;
+} Entry;
 
-typedef struct LeafPage {
-    PageHeader pageheader;
-    Record records[LEAF_ORDER];
-} LeafPage;
-
-typedef struct InternalPage {
-    PageHeader pageheader;
-    entry entries[INTERNAL_ORDER - 1];  // maximum of 248 entries
-} InternalPage;
+typedef struct nodePage {
+    PageHeader header;
+    union {
+        Record records[LEAF_ORDER];     //31 records can go in leaf
+        Entry entries[INTERNAL_ORDER-1];//248 entries can go in internal
+    };
+} NodePage;
 
 typedef struct page_t {
     /*
@@ -87,8 +88,7 @@ typedef struct page_t {
     union  {
         HeaderPage hp;
         FreePage fp;
-        LeafPage lp;
-        InternalPage ip;
+        NodePage node;
     };
 } page_t;
 
@@ -136,6 +136,7 @@ pagenum_t getNumPages(page_t * page);
 int setFreePageOffset(page_t * page, offset_t offset);
 int setRootPageOffset(page_t * page, offset_t offset);
 int setNumPages(page_t * page, pagenum_t pages);
+void increment(page_t * page);  //adds 1 to numPages
 
 // Free Page
     // Getters
@@ -143,15 +144,25 @@ offset_t getNextFreePage(page_t * page);
     // Setters
 int setNextFreePage(page_t * page, offset_t offset);
 
-// Internal Page
+// Node Page
     // Getters -> Page Header code getters shared with Leaf Page
+        // Page Header Getters
 offset_t getParentPageNum(page_t * page);
 int getNumKeys(page_t * page);
 int isLeaf(page_t * page);
-int getOneMorePage(page_t * page);
+offset_t getOneMorePage(page_t * page);
+
+        // Leaf Page Getters
+int copyRecord(page_t * page, keyNum key, char * dest);
 keyNum getKey(page_t * page, int index);
+int getIndex(page_t * page, keyNum key);
+        // Internal Page Getters
     // Setters
 int setParentPageNum(page_t * page, offset_t offset);
 int setLeaf(page_t * page); // if 1 -> 0. if 0 -> 1
+
+
+// Utility Functions
+int PageType(page_t page);    // returns the type of page
 
 #endif /*__FM_H__*/
