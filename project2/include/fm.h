@@ -106,6 +106,8 @@ int openDB(char * pathname);
 
 page_t createHeaderPage();
 page_t createFreePage(pagenum_t offset, pagenum_t nextFreePage);
+page_t createInternalPage();
+page_t createLeafPage();
 
 // Free an on-disk page to the free page list
 void file_free_page(pagenum_t pagenum);
@@ -118,7 +120,7 @@ void file_read_page(pagenum_t pagenum, page_t* dest);
 // Write an in-memory page(src) to the on-disk page
 void file_write_page(pagenum_t pagenum, const page_t* src);
     // Write new page header (for leaf and internal pages)
-void file_write_PageHeader(page_t * page, pagenum_t freepage, pagenum_t reserved, int isLeaf, int num);
+PageHeader file_write_PageHeader(page_t * page, pagenum_t parent, offset_t sibling, int isLeaf, int num);
     // Write new page entry (for internal pages)
 void file_write_entry(page_t * page, pagenum_t key, pagenum_t value);
     // Write new page record (for leaf pages)
@@ -146,23 +148,31 @@ int setNextFreePage(page_t * page, offset_t offset);
 
 // Node Page
     // Getters -> Page Header code getters shared with Leaf Page
+
         // Page Header Getters
 offset_t getParentPageNum(page_t * page);
 int getNumKeys(page_t * page);
 int isLeaf(page_t * page);
 offset_t getOneMorePage(page_t * page);
-
         // Leaf Page Getters
 int copyRecord(page_t * page, keyNum key, char * dest);
 keyNum getKey(page_t * page, int index);
 int getIndex(page_t * page, keyNum key);
         // Internal Page Getters
+
     // Setters
 int setParentPageNum(page_t * page, offset_t offset);
-int setLeaf(page_t * page); // if 1 -> 0. if 0 -> 1
-
+int LeafToggle(page_t * page); // if 1 -> 0. if 0 -> 1
+int setNumkeys(page_t * page, int keys);
+int setEntryOffset(page_t * page, offset_t offset, int index);
+int setRecordValue(page_t * page, char * value, int index);
+int setKey(page_t * page, keyNum key, int index);
 
 // Utility Functions
 int PageType(page_t page);    // returns the type of page
+int findEmptyEntryIndex(page_t * page);
+int findEmptyRecordIndex(page_t * page);
+int findEntryByKey(page_t * page, keyNum key);
+int findRecordByKey(page_t * page, keyNum key);
 
 #endif /*__FM_H__*/

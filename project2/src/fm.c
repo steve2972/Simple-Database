@@ -7,11 +7,13 @@ int openDB(char * pathname) {
     if (access(pathname, F_OK) != -1) {
         // Case 1: file exists
         file = open(pathname, O_RDWR);
+        READ(header, 0);
         return 1;
     }
     else {
         // Case 2: file does not exist
         file = open(pathname, O_RDWR | O_CREAT, 0777);
+        header = createHeaderPage();
         return 0;
     }    
 }
@@ -29,16 +31,13 @@ page_t createHeaderPage() {
     // We don't know the root yet, so set it to header page
     setRootPageOffset(&header, 0);
 
-    //Allocate two new free pages (just in case)
-    createFreePage(1, 2);   //Creates a free page just after header
-    createFreePage(2, 0);   //Creates a free page after the one before
+    // Create two new free pages
+    file_alloc_page();
 
     WRITE(header, 0);
     return header;
 }
 
-// @param[in] takes the page offset as input, and nextFreePage = 0
-// if it is the last free page
 page_t createFreePage(pagenum_t offset, pagenum_t nextFreePage) {
     // Allocates memory for a new free page at offset num * sizeof(page)
     page_t free;
@@ -47,8 +46,6 @@ page_t createFreePage(pagenum_t offset, pagenum_t nextFreePage) {
     WRITE(free, PAGEOFFSET(offset));
     return free;
 }
-
-
 // Free an on-disk page to the free page list
 void file_free_page(pagenum_t pagenum) {
     page_t tempFree;
@@ -118,13 +115,34 @@ void file_write_page(pagenum_t pagenum, const page_t* src) {
     fflush(stdout); // synchronize the file to on-disk memory
 }
 //TODO: create file_write_PageHeader
+PageHeader file_write_PageHeader(page_t * page, pagenum_t parent,\
+                            offset_t sibling, int isLeaf, int num) {
+
+    PageHeader pageheader;
+    pageheader.isLeaf = isLeaf;
+    pageheader.ParentPageNum = parent;
+    pageheader.sibling = sibling;
+    pageheader.NumKeys = num;
+    
+    return pageheader;
+}
 void file_write_entry(page_t * page, pagenum_t key, pagenum_t value) {
     Entry entry;
     entry.key = key;
     entry.page = value;
+    
+    // Find the position where 
+    int index = findEmptyEntryIndex(page);
+    // Set the entry at the index equal to the above entry
+    page->node.entries[index] = entry;
 }
 void file_write_record(page_t * page, pagenum_t key, char * value) {
-
+    Record record;
+    record.key = key;
+    strcpy(record.value, value);
+    
+    int index = findEmptyRecordIndex(page);
+    page->node.records[index] = record;
 }
 
 // Header Page
@@ -194,7 +212,7 @@ int isLeaf(page_t * page) {
 }
 offset_t getOneMorePage(page_t * page) {
     // Returns the right sibling for leaf. Returns one more page for internal.
-    return ((const NodePage *)page)->header.sibling;   // Can be leaf or internal page
+    return ((const NodePage *)page)->header.sibling;
 }
 
         // Leaf Page Getters
@@ -254,6 +272,50 @@ int getIndex(page_t * page, keyNum key) {
     }
 }
     // Setters
+int setParentPageNum(page_t * page, offset_t offset) {
+    page->node.header.ParentPageNum = offset;
+
+    return page->node.header.ParentPageNum == offset ? 1:0;
+}
+int LeafToggle(page_t * page) {
+    if (page->node.header.isLeaf == 0) {
+        // This is not a leaf -> set to leaf
+        page->node.header.isLeaf = 1;
+        return 1;
+    }
+    else {
+        page->node.header.isLeaf = 0;
+        return 1;
+    }
+
+    return -1;
+}
+int setNumKeys(page_t * page, int keys) {
+    page->node.header.NumKeys = keys;
+
+    return page->node.header.NumKeys == keys ? 1:0;
+}
+int setEntryOffset(page_t * page, offset_t offset, int index) {
+    page->node.entries[index].page = offset;
+
+    return page->node.entries[index].page == offset ? 1 : 0;
+}
+int setRecordValue(page_t * page, char * value, int index) {
+    strcpy(page->node.records[index].value, value);
+
+    return strcmp(page->node.records[index].value, value) == 0 ? 1 : 0;
+}
+int setKey(page_t * page, keyNum key, int index) {
+    if (isLeaf(page)) {
+        page->node.records[index].key = key;
+        return 1;
+    }
+    else if (!isLeaf(page)) {
+        page->node.entries[index].key = key;
+        return 1;
+    }
+    return -1;
+}
 
 
 // Utility Functions
@@ -271,4 +333,40 @@ int PageType(page_t page) {
         return 2;
     }
     return 3;
+}
+
+int findEmptyEntryIndex(page_t * page) {
+    for (int i = 0; i < INTERNAL_ORDER -2; i++) {
+        //248 entries means that the last entry index = 247 = 249-2
+        if (((const NodePage *)page)->entries[i].key == 0) {
+            return i;
+        }
+    }
+    // Returns -1 if full
+    return -1;
+}
+int findEmptyRecordIndex(page_t * page) {
+    for (int i = 0; i < LEAF_ORDER-1; i++) {
+        if (((const NodePage *)page)->records[i].key == 0) {
+            return i;
+        }
+    }
+    // Returns -1 if full
+    return -1;
+}
+int findEntryByKey(page_t * page, keyNum key) {
+    for (int i = 0 ; i < INTERNAL_ORDER - 2; i++) {
+        if (((const NodePage *)page)->entries[i].key == key) {
+            return i;
+        }
+    }
+    return -1;
+}
+int findRecordByKey(page_t * page, keyNum key) {
+    for (int i = 0; i < LEAF_ORDER-1; i++) {
+        if (((const NodePage *)page)->records[i].key == key) {
+            return i;
+        }
+    }
+    return -1;
 }
