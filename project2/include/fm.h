@@ -1,6 +1,13 @@
 #ifndef __FM_H__
 #define __FM_H__
 
+/*
+ * fm.h is short for File Management Header File.
+ * This layer of my database system manages the 
+ * disk space and is congruent to the Disk Space Management
+ * layer in a usual DBMS architecture
+ */
+
 #define Windows
 
 // standard header files

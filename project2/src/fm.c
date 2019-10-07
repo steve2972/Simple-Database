@@ -354,6 +354,7 @@ int findEmptyRecordIndex(page_t * page) {
     // Returns -1 if full
     return -1;
 }
+//TODO: implement a faster search method
 int findEntryByKey(page_t * page, keyNum key) {
     for (int i = 0 ; i < INTERNAL_ORDER - 2; i++) {
         if (((const NodePage *)page)->entries[i].key == key) {

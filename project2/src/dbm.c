@@ -3,6 +3,8 @@
 page_t head;
 page_t root_page;
 
+// Database IO
+
 int open_table(char* pathname) {
     /* Opens/creates file with name pathname
      * @param[out]: 1 if new file, 0 if existing file
