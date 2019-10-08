@@ -29,8 +29,7 @@
 #define PAGE_SIZE 4096
 
 extern int file;
-extern page_t header;   // file and header are necessary when reading,
-                        // so, cache them!
+
 
 /*
 * Type definitions of the most commonly used Bytes
@@ -162,7 +161,7 @@ int getNumKeys(page_t * page);
 int isLeaf(page_t * page);
 offset_t getOneMorePage(page_t * page);
         // Leaf Page Getters
-int copyRecord(page_t * page, keyNum key, char * dest);
+int copyRecord(page_t * page, int index, char * dest);
 keyNum getKey(page_t * page, int index);
 int getIndex(page_t * page, keyNum key);
         // Internal Page Getters
@@ -181,5 +180,10 @@ int findEmptyEntryIndex(page_t * page);
 int findEmptyRecordIndex(page_t * page);
 int findEntryByKey(page_t * page, keyNum key);
 int findRecordByKey(page_t * page, keyNum key);
+
+
+
+extern page_t header;   // file and header are necessary when reading,
+                        // so, cache them!
 
 #endif /*__FM_H__*/

@@ -98,20 +98,14 @@ pagenum_t file_alloc_page() {
 }
 // Read an on-disk page into the in-memory page structure(dest)
 void file_read_page(pagenum_t pagenum, page_t* dest) {
-    if (pread(file, dest, PAGE_SIZE, PAGEOFFSET(pagenum)) < PAGE_SIZE) {
-        printf("Failed to read the file\n");
-        exit(EXIT_FAILURE);
-    }
+    pread(file, dest, PAGE_SIZE, PAGEOFFSET(pagenum));
 }
 
 // Writer function
 
 // Write an in-memory page(src) to the on-disk page
 void file_write_page(pagenum_t pagenum, const page_t* src) {
-    if (pwrite(file, src, PAGE_SIZE, PAGEOFFSET(pagenum))< PAGE_SIZE) {
-        printf("Failed to write the file to the disk\n");
-        exit(EXIT_FAILURE);
-    }
+    pwrite(file, src, PAGE_SIZE, PAGEOFFSET(pagenum));
     fflush(stdout); // synchronize the file to on-disk memory
 }
 //TODO: create file_write_PageHeader
@@ -149,9 +143,7 @@ void file_write_record(page_t * page, pagenum_t key, char * value) {
     // Getters
 
 page_t getHeaderPage() {
-    page_t head;
-    READ(head, 0);
-    return head;
+    return header;
 }
 
 page_t getRootPage(page_t * header) {
@@ -216,16 +208,16 @@ offset_t getOneMorePage(page_t * page) {
 }
 
         // Leaf Page Getters
-int copyRecord(page_t * page, keyNum key, char * dest) {
+int copyRecord(page_t * page, int index, char * dest) {
     // Copies contents of the record into the destination
     // On-disk => in memory
-    char * src = ((const NodePage *)page)->records[key].value;
+    char * src = ((const NodePage *)page)->records[index].value;
     strcpy(dest, src);
     // Return 1 if successfully copied
     return strcmp(dest, src) == 0 ? 1 : 0;
 }
 keyNum getKey(page_t * page, int index) {
-    // Important function that returns the key associated with the index
+    // Helper function that returns the key associated with the index
     // Returns -1 if failed to find key, or if list out-of-bounds
 
     // Case 1: Internal Page
@@ -249,7 +241,7 @@ keyNum getKey(page_t * page, int index) {
     }
 }
 int getIndex(page_t * page, keyNum key) {
-    // Function that returns the index associated with the key
+    // Helper function that returns the index associated with the key
 
     // Case 1: Internal Page
     if (!isLeaf(page)) {
