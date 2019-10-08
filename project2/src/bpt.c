@@ -87,98 +87,6 @@ bool verbose_output = false;
 
 // OUTPUT AND UTILITIES
 
-/* Copyright and license notice to user at startup. 
- */
-void license_notice( void ) {
-    printf("bpt version %s -- Copyright (C) 2010  Amittai Aviram "
-            "http://www.amittai.com\n", Version);
-    printf("This program comes with ABSOLUTELY NO WARRANTY; for details "
-            "type `show w'.\n"
-            "This is free software, and you are welcome to redistribute it\n"
-            "under certain conditions; type `show c' for details.\n\n");
-}
-
-
-/* Routine to print portion of GPL license to stdout.
- */
-void print_license( int license_part ) {
-    int start, end, line;
-    FILE * fp;
-    char buffer[0x100];
-
-    switch(license_part) {
-    case LICENSE_WARRANTEE:
-        start = LICENSE_WARRANTEE_START;
-        end = LICENSE_WARRANTEE_END;
-        break;
-    case LICENSE_CONDITIONS:
-        start = LICENSE_CONDITIONS_START;
-        end = LICENSE_CONDITIONS_END;
-        break;
-    default:
-        return;
-    }
-
-    fp = fopen(LICENSE_FILE, "r");
-    if (fp == NULL) {
-        perror("print_license: fopen");
-        exit(EXIT_FAILURE);
-    }
-    for (line = 0; line < start; line++)
-        fgets(buffer, sizeof(buffer), fp);
-    for ( ; line < end; line++) {
-        fgets(buffer, sizeof(buffer), fp);
-        printf("%s", buffer);
-    }
-    fclose(fp);
-}
-
-
-/* First message to the user.
- */
-void usage_1( void ) {
-    printf("B+ Tree of Order %d.\n", order);
-    printf("Following Silberschatz, Korth, Sidarshan, Database Concepts, "
-           "5th ed.\n\n"
-           "To build a B+ tree of a different order, start again and enter "
-           "the order\n"
-           "as an integer argument:  bpt <order>  ");
-    printf("(%d <= order <= %d).\n", MIN_ORDER, MAX_ORDER);
-    printf("To start with input from a file of newline-delimited integers, \n"
-           "start again and enter the order followed by the filename:\n"
-           "bpt <order> <inputfile> .\n");
-}
-
-
-/* Second message to the user.
- */
-void usage_2( void ) {
-    printf("Enter any of the following commands after the prompt > :\n"
-    "\ti <k>  -- Insert <k> (an integer) as both key and value).\n"
-    "\tf <k>  -- Find the value under key <k>.\n"
-    "\tp <k> -- Print the path from the root to key k and its associated "
-           "value.\n"
-    "\tr <k1> <k2> -- Print the keys and values found in the range "
-            "[<k1>, <k2>\n"
-    "\td <k>  -- Delete key <k> and its associated value.\n"
-    "\tx -- Destroy the whole tree.  Start again with an empty tree of the "
-           "same order.\n"
-    "\tt -- Print the B+ tree.\n"
-    "\tl -- Print the keys of the leaves (bottom row of the tree).\n"
-    "\tv -- Toggle output of pointer addresses (\"verbose\") in tree and "
-           "leaves.\n"
-    "\tq -- Quit. (Or use Ctl-D.)\n"
-    "\t? -- Print this help message.\n");
-}
-
-
-/* Brief usage note.
- */
-void usage_3( void ) {
-    printf("Usage: ./bpt [<order>]\n");
-    printf("\twhere %d <= order <= %d .\n", MIN_ORDER, MAX_ORDER);
-}
-
 
 /* Helper function for printing the
  * tree out.  See print_tree.
@@ -388,11 +296,6 @@ int find_range( node * root, int key_start, int key_end, bool verbose,
 }
 
 
-/* Traces the path from the root to a leaf, searching
- * by key.  Displays information about the path
- * if the verbose flag is set.
- * Returns the leaf containing the given key.
- */
 node * find_leaf( node * root, int key, bool verbose ) {
     int i = 0;
     node * c = root;
@@ -425,7 +328,6 @@ node * find_leaf( node * root, int key, bool verbose ) {
     }
     return c;
 }
-//TODO: finish findLeaf
 pagenum_t findLeaf(pagenum_t root, keyNum key) {
     pagenum_t c = root;
     page_t page;
@@ -434,17 +336,23 @@ pagenum_t findLeaf(pagenum_t root, keyNum key) {
     while (!isLeaf(&page)) {
         // Continue looping until leaf page is found
         if (key < getKey(&page, 0)) {
-            // Get the one more page offset for internal pages
+            // Get the page number of the key -> leftmost sibling of page
             c = getOneMorePage(&page);
         }
         else {
             int index = getIndex(&page, key);
             if (index == -1) {
                 // Index not in the internal page
-                return 0;
+                return -1;
             } 
+            c = getEntryOffset(&page, index+1);
         }
+
+        // Sync the page with the current page number
+        file_read_page(c, &page);
     }
+
+    return c;
 }
 
 
@@ -462,14 +370,24 @@ record * find( node * root, int key, bool verbose ) {
     else
         return (record *)c->pointers[i];
 }
-Record find(page_t * root, keyNum key) {
-    page_t * c = findLeaf(root, key);
-    int index = getIndex(c, key);
-    if (index > -1) {
-        return c->node.records[index];
+Record * findRecord(pagenum_t root, keyNum key) {
+    pagenum_t leaf = findLeaf(root, key);
+
+    if (leaf == -1) {
+        return NULL;
     }
 
-    Record record = {-1};
+    page_t leafPage;
+    file_read_page(leaf, &leafPage);
+    int index = getIndex(&leafPage, key);
+
+    if (index == -1) {
+        return NULL;
+    }
+
+    Record * record = (Record *)malloc(sizeof(Record));
+    record->key = getKey(&leafPage, index);
+    copyRecord(&leafPage, index, record->value);
     return record;
 }
 
@@ -485,10 +403,6 @@ int cut( int length ) {
 
 
 // INSERTION
-
-/* Creates a new record to hold the value
- * to which a key refers.
- */
 record * make_record(keyNum key, char * value) {
     record * new_record = (record *)malloc(sizeof(record));
     if (new_record == NULL) {
@@ -501,11 +415,6 @@ record * make_record(keyNum key, char * value) {
     }
     return new_record;
 }
-
-
-/* Creates a new general node, which can be adapted
- * to serve as either a leaf or an internal node.
- */
 node * make_node( void ) {
     node * new_node;
     new_node = malloc(sizeof(node));
@@ -529,21 +438,11 @@ node * make_node( void ) {
     new_node->next = NULL;
     return new_node;
 }
-
-/* Creates a new leaf by creating a node
- * and then adapting it appropriately.
- */
 node * make_leaf( void ) {
     node * leaf = make_node();
     leaf->is_leaf = true;
     return leaf;
 }
-
-
-/* Helper function used in insert_into_parent
- * to find the index of the parent's pointer to 
- * the node to the left of the key to be inserted.
- */
 int get_left_index(node * parent, node * left) {
 
     int left_index = 0;
@@ -552,11 +451,21 @@ int get_left_index(node * parent, node * left) {
         left_index++;
     return left_index;
 }
+int getLeftIndex(pagenum_t parent, pagenum_t left) {
+    int left_index = 0;
 
-/* Inserts a new pointer to a record and its corresponding
- * key into a leaf.
- * Returns the altered leaf.
- */
+    page_t parent;
+    file_read_page(parent, &parent);
+    while (left_index <= getNumKeys(&parent) && 
+            getEntryOffset(&parent, left_index) != left_index) {
+            
+            left_index++;
+    }
+
+    return left_index;
+}
+
+
 node * insert_into_leaf( node * leaf, int key, record * pointer ) {
 
     int i, insertion_point;
@@ -574,7 +483,43 @@ node * insert_into_leaf( node * leaf, int key, record * pointer ) {
     leaf->num_keys++;
     return leaf;
 }
+offset_t insertIntoLeaf(offset_t leaf, Record * record) {
+    int insertion_point, numKeys;
+    page_t leafPage;
+    file_read_page(leaf, &leafPage);
+    numKeys = getNumKeys(&leafPage);
 
+    // Find the insertion poing
+    if (record->key < getKey(&leafPage, 0)) {
+        insertion_point = 0;
+    }
+    else {
+        insertion_point = search(&leafPage, record->key) + 1;
+        if (insertion_point == 0) {
+            return -1;
+        }
+    }
+
+    // Rearrange the leaf records so that the keys are in numerical order
+
+    for (int i = numKeys; i > insertion_point; i--) {
+        // Go from back to front because we need to set the values 
+        // Instead of using a temporary memory space
+        // [1,2,3]=> [,1,2]
+        char temp[120];
+        setKey(&leafPage, getKey(&leafPage, i-1), i);
+        copyRecord(&leafPage, i-1, temp);
+        setRecordValue(&leafPage, temp, i);
+    }
+    
+    // Insert into insertion_point
+    setKey(&leafPage, record->key, insertion_point);
+    setRecordValue(&leafPage, record->value, insertion_point);
+    setNumkeys(&leafPage, leafPage.node.header.NumKeys + 1);
+
+    file_write_page(leaf, &leafPage);
+    return leaf;
+}
 
 /* Inserts a new key and pointer
  * to a new record into a leaf so as to exceed
@@ -647,6 +592,75 @@ node * insert_into_leaf_after_splitting(node * root, node * leaf, int key, recor
 
     return insert_into_parent(root, leaf, new_key, new_leaf);
 }
+offset_t insertIntoLeafAfterSplitting(offset_t root, offset_t leaf, Record * record) {
+    // Same logic as insert_into_leaf_after_splitting() from the bpt code
+    page_t leafPage, newLeafPage;
+    offset_t newLeafOffset;
+    keyNum temp_keys[LEAF_ORDER];
+    char temp_records[LEAF_ORDER][120];      //temp values = 31 records of 120 chars each
+    int insertion_index, split, new_key, i, j;
+
+    newLeafOffset = createLeafPage();
+
+    file_read_page(leaf, &leafPage);
+    file_read_page(newLeafOffset, &newLeafPage);
+
+    // First find where to insert the record
+    if (record->key < getKey(&leafPage, 0))
+        insertion_index = 0;
+    else
+        insertion_index = search(&leafPage, record->key) + 1;
+
+    // Adapted from bpt code
+    for (i = 0, j = 0; i < getNumKeys(&leafPage); i++, j++) {
+        if (j == insertion_index) j++;
+        temp_keys[j] = getKey(&leafPage, i);
+        copyRecord(&leafPage, i, temp_records[j]);
+    }
+
+    temp_keys[insertion_index] = record->key;
+    strcpy(temp_records[insertion_index], record->value);
+
+    split = cut(LEAF_ORDER -1);
+
+    int temp = 0;   // Use temp to dynamically get the number of keys;
+    for (i = 0; i < split; i++) {
+        setRecordValue(&leafPage, i, temp_records[i]);
+        setKey(&leafPage, temp_keys[i], i);
+        setNumkeys(&leafPage, ++temp);
+    }
+    temp = 0;
+    for (i = split, j = 0; i < order; i++, j++) {
+        setRecordValue(&newLeafPage, j, temp_records[i]);
+        setKey(&newLeafPage, temp_keys[i], j);
+        setNumkeys(&newLeafPage, ++temp);
+    }
+
+    free(temp_records);
+    free(temp_keys);
+
+    setEntryOffset(&newLeafPage, getEntryOffset(&leafPage, LEAF_ORDER-1), LEAF_ORDER-1);
+    setEntryOffset(&leafPage, newLeafOffset, LEAF_ORDER-1);
+
+    for (i = getNumKeys(&leafPage); i < LEAF_ORDER-1; i++) {
+        setKey(&leafPage, 0, i);
+        setRecordValue(&leafPage, "", 0);
+    }
+    for (i = getNumKeys(&newLeafPage); i < LEAF_ORDER-1; i++) {
+        setKey(&newLeafPage, 0, i);
+        setRecordValue(&newLeafPage, "", 0);
+    }
+
+    new_key = getKey(&newLeafPage, 0);
+    // parent node of split new page is the same as the original page
+    setParentPageNum(&newLeafPage, getParentPageNum(&leafPage));
+
+    file_write_page(leaf, &leafPage);
+    file_write_page(newLeafOffset, &newLeafPage);
+
+    return insertIntoParent(root, leaf, new_key, newLeafOffset);
+}
+
 
 
 /* Inserts a new key and pointer to a node
