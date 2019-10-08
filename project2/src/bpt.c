@@ -425,6 +425,27 @@ node * find_leaf( node * root, int key, bool verbose ) {
     }
     return c;
 }
+//TODO: finish findLeaf
+pagenum_t findLeaf(pagenum_t root, keyNum key) {
+    pagenum_t c = root;
+    page_t page;
+    file_read_page(c, &page);
+
+    while (!isLeaf(&page)) {
+        // Continue looping until leaf page is found
+        if (key < getKey(&page, 0)) {
+            // Get the one more page offset for internal pages
+            c = getOneMorePage(&page);
+        }
+        else {
+            int index = getIndex(&page, key);
+            if (index == -1) {
+                // Index not in the internal page
+                return 0;
+            } 
+        }
+    }
+}
 
 
 /* Finds and returns the record to which
@@ -440,6 +461,16 @@ record * find( node * root, int key, bool verbose ) {
         return NULL;
     else
         return (record *)c->pointers[i];
+}
+Record find(page_t * root, keyNum key) {
+    page_t * c = findLeaf(root, key);
+    int index = getIndex(c, key);
+    if (index > -1) {
+        return c->node.records[index];
+    }
+
+    Record record = {-1};
+    return record;
 }
 
 /* Finds the appropriate place to
@@ -458,14 +489,15 @@ int cut( int length ) {
 /* Creates a new record to hold the value
  * to which a key refers.
  */
-record * make_record(int value) {
+record * make_record(keyNum key, char * value) {
     record * new_record = (record *)malloc(sizeof(record));
     if (new_record == NULL) {
         perror("Record creation.");
         exit(EXIT_FAILURE);
     }
     else {
-        new_record->value = value;
+        new_record->key = key;
+        strcpy(new_record->value, value);
     }
     return new_record;
 }
@@ -800,7 +832,7 @@ node * start_new_tree(int key, record * pointer) {
  * however necessary to maintain the B+ tree
  * properties.
  */
-node * insert( node * root, int key, int value ) {
+node * insert( node * root, keyNum key, char * value) {
 
     record * pointer;
     node * leaf;
@@ -815,7 +847,7 @@ node * insert( node * root, int key, int value ) {
     /* Create a new record for the
      * value.
      */
-    pointer = make_record(value);
+    pointer = make_record(key, value);
 
 
     /* Case: the tree does not exist yet.
