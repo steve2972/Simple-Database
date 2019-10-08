@@ -25,7 +25,7 @@ page_t createHeaderPage() {
      * 
      * However, we do not have a free page yet, so this will be
      * implemented later on. */ 
-    setFreePageOffset(&header, 1);
+    setFreePageOffset(&header, 0);
     // Number of pages = 1 (only the header)
     setNumPages(&header, 1);
     // We don't know the root yet, so set it to header page
@@ -46,6 +46,61 @@ page_t createFreePage(pagenum_t offset, pagenum_t nextFreePage) {
     WRITE(free, PAGEOFFSET(offset));
     return free;
 }
+offset_t createInternalPage() {
+    page_t internal;
+
+    // Allocate the required memory space from the free page list
+    offset_t offset = file_alloc_page();
+
+    file_read_page(offset, &internal);
+
+    memset(&internal, 0, PAGE_SIZE);
+
+    PageHeader header;
+    header.isLeaf = 0;
+    header.NumKeys = 0;
+    header.ParentPageNum = 0;
+    header.sibling = 0;
+
+    internal.node.header = header;
+
+    for (int i = 0; i < INTERNAL_ORDER-1; i++) {
+        setKey(&internal, 0, i);
+        setEntryOffset(&internal, 0, i);
+    }
+
+    file_write_page(offset, &internal);
+
+    return offset;
+}
+offset_t createLeafPage() {
+    page_t leaf;
+
+    // Same proccess as createInternalPage()
+    offset_t offset = file_alloc_page();
+
+    file_read_page(offset, &leaf);
+
+    memset(&leaf, 0, PAGE_SIZE);
+
+    PageHeader header;
+    header.isLeaf = 1;
+    header.NumKeys = 0;
+    header.ParentPageNum = 0;
+    header.sibling = 0;
+
+    leaf.node.header = header;
+
+    for (int i = 0; i < LEAF_ORDER-1; i++) {
+        setKey(&leaf, 0, i);
+        setRecordValue(&leaf, "", 0);
+    }
+
+    file_write_page(offset, &leaf);
+
+    return offset;
+}
+
 // Free an on-disk page to the free page list
 void file_free_page(pagenum_t pagenum) {
     page_t tempFree;
@@ -71,29 +126,40 @@ pagenum_t file_alloc_page() {
     file_read_page(0, &header);
 
     page_t tempFree;
-    if(getFreePageOffset(&header) == 1) {
-        setFreePageOffset(&header, getNumPages(&header));
+    if(getFreePageOffset(&header) == 0) {
+        pagenum_t nextFreePage = getNumPages(&header);
+        setFreePageOffset(&header, nextFreePage);
 
         // Add two new free pages to the header page
-        // TODO: add implementation for dynamic free page allocation
-        setNextFreePage(&tempFree, 2);
-        file_write_page(1, &tempFree);
-        setNextFreePage(&tempFree, 0);
-        file_write_page(2, &tempFree);
+        for (int i = 1; i <= 2; i++) {
+            nextFreePage++;
+            // set the next free page to either nextfreepage or 0 (beginning)
+            setNextFreePage(&tempFree, i < 2 ? nextFreePage:0);
+            file_write_page(nextFreePage, &tempFree);
+        }
 
         // Synchronize the header page
         setNumPages(&header, getNumPages(&header) + 2);
         file_write_page(0, &header);
     }
 
-    //TODO: fix logic of <else> free file allocation
+    /* Use alloc page whenever creating a new leaf page or internal page
+     * Thus, we clear the next free page, and set the next free page offset
+     * of the header page to the next free page offset of the original 
+     * free page.
+     */
     offset_t nextFreePageOffset = getFreePageOffset(&header);
 
+    // suppose the header is A:
     file_read_page(nextFreePageOffset, &tempFree);
+    // A -> F1 -> F2 turns into A -> F2
     setNextFreePage(&header, getNextFreePage(&tempFree));
 
     // Synchronize
     file_write_page(0, &header);
+
+    // Return the address of F1
+    return nextFreePageOffset;
 
 }
 // Read an on-disk page into the in-memory page structure(dest)
@@ -207,7 +273,7 @@ offset_t getOneMorePage(page_t * page) {
     return ((const NodePage *)page)->header.sibling;
 }
 
-        // Leaf Page Getters
+        // Node Page Getters
 int copyRecord(page_t * page, int index, char * dest) {
     // Copies contents of the record into the destination
     // On-disk => in memory
@@ -222,7 +288,7 @@ keyNum getKey(page_t * page, int index) {
 
     // Case 1: Internal Page
     if(!isLeaf(page)) {
-        if (index >= INTERNAL_ORDER - 2) {
+        if (index > INTERNAL_ORDER - 2) {
             return -1;
         }
         else {
@@ -231,7 +297,7 @@ keyNum getKey(page_t * page, int index) {
     }
     else {
     // Case 2: Leaf Page
-        if (index >= LEAF_ORDER -1) {
+        if (index > LEAF_ORDER -1) {
             return -1;
         }
         else {
@@ -245,7 +311,7 @@ int getIndex(page_t * page, keyNum key) {
 
     // Case 1: Internal Page
     if (!isLeaf(page)) {
-        for(int i = 0; i < INTERNAL_ORDER-2; i++) {
+        for(int i = 0; i < INTERNAL_ORDER-1; i++) {
             if (((const NodePage *)page)->entries[i].key == key) {
                 return i;
             }
@@ -255,12 +321,34 @@ int getIndex(page_t * page, keyNum key) {
 
     // Case 2: Leaf Page
     if (isLeaf(page)) {
-        for (int i = 0; i < LEAF_ORDER-1; i++) {
+        for (int i = 0; i < LEAF_ORDER; i++) {
             if (((const NodePage *)page)->records[i].key == key) {
                 return i;
             }
         }
         return -1;      // Failed to find associated key in Leaf Page
+    }
+}
+offset_t getEntryOffset(page_t * page, int index) {
+    if (!isLeaf(page)) {
+        // Internal Page => [0, 247]
+        if (index >= INTERNAL_ORDER -1) {
+            return -1;
+        }
+        else if (index == 0) {
+            // returns One more Page Number -> used where leftmost key deleted
+            return getOneMorePage(page);
+        }
+        else {
+            return ((const NodePage *)page)->entries[index].page;
+        }
+    }
+    else {
+        // Leaf Page: helper function to get the right sibling
+        if (index == LEAF_ORDER) {
+            return ((const NodePage *)page)->header.sibling;
+        }
+        return -1;
     }
 }
     // Setters
@@ -328,7 +416,7 @@ int PageType(page_t page) {
 }
 
 int findEmptyEntryIndex(page_t * page) {
-    for (int i = 0; i < INTERNAL_ORDER -2; i++) {
+    for (int i = 0; i < INTERNAL_ORDER -1; i++) {
         //248 entries means that the last entry index = 247 = 249-2
         if (((const NodePage *)page)->entries[i].key == 0) {
             return i;
@@ -338,7 +426,7 @@ int findEmptyEntryIndex(page_t * page) {
     return -1;
 }
 int findEmptyRecordIndex(page_t * page) {
-    for (int i = 0; i < LEAF_ORDER-1; i++) {
+    for (int i = 0; i < LEAF_ORDER; i++) {
         if (((const NodePage *)page)->records[i].key == 0) {
             return i;
         }
@@ -356,10 +444,30 @@ int findEntryByKey(page_t * page, keyNum key) {
     return -1;
 }
 int findRecordByKey(page_t * page, keyNum key) {
-    for (int i = 0; i < LEAF_ORDER-1; i++) {
+    for (int i = 0; i < LEAF_ORDER; i++) {
         if (((const NodePage *)page)->records[i].key == key) {
             return i;
         }
+    }
+    return -1;
+}
+int search(page_t * page, keyNum key) {
+    /*
+     * DISCLAIMER: the following algorithm is adapted from the code uploaded to
+     * gitHub under the alias hgs3896
+     */
+    int left = 0, right = getNumKeys(page), middle, middle_key;
+    while (left < right) {
+        middle = (left + right) / 2;
+
+        if ( left == middle )
+            return middle;
+
+        middle_key = getKey(page, middle);
+        if (middle_key <= key)
+            left = middle;
+        else
+            right = middle;
     }
     return -1;
 }

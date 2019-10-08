@@ -25,7 +25,7 @@
 #include <errno.h>
 
 #define INTERNAL_ORDER 249
-#define LEAF_ORDER 31
+#define LEAF_ORDER 32
 #define PAGE_SIZE 4096
 
 extern int file;
@@ -80,7 +80,7 @@ typedef struct Entry {
 typedef struct nodePage {
     PageHeader header;
     union {
-        Record records[LEAF_ORDER];     //31 records can go in leaf
+        Record records[LEAF_ORDER];     //32 records can go in leaf
         Entry entries[INTERNAL_ORDER-1];//248 entries can go in internal
     };
 } NodePage;
@@ -112,8 +112,8 @@ int openDB(char * pathname);
 
 page_t createHeaderPage();
 page_t createFreePage(pagenum_t offset, pagenum_t nextFreePage);
-page_t createInternalPage();
-page_t createLeafPage();
+offset_t createInternalPage();
+offset_t createLeafPage();
 
 // Free an on-disk page to the free page list
 void file_free_page(pagenum_t pagenum);
@@ -160,12 +160,11 @@ offset_t getParentPageNum(page_t * page);
 int getNumKeys(page_t * page);
 int isLeaf(page_t * page);
 offset_t getOneMorePage(page_t * page);
-        // Leaf Page Getters
+        // Node Page Getters
 int copyRecord(page_t * page, int index, char * dest);
 keyNum getKey(page_t * page, int index);
 int getIndex(page_t * page, keyNum key);
-        // Internal Page Getters
-
+offset_t getEntryOffset(page_t * page, int index);
     // Setters
 int setParentPageNum(page_t * page, offset_t offset);
 int LeafToggle(page_t * page); // if 1 -> 0. if 0 -> 1
@@ -180,6 +179,7 @@ int findEmptyEntryIndex(page_t * page);
 int findEmptyRecordIndex(page_t * page);
 int findEntryByKey(page_t * page, keyNum key);
 int findRecordByKey(page_t * page, keyNum key);
+int search(page_t * page, keyNum key);
 
 
 
