@@ -2,8 +2,17 @@
 
 int main( int argc, char ** argv ) {
     open_table("test.db");
-
     
+
+    while(1) {
+        char c[120], op;
+        keyNum key;
+        printf("> ");
+        scanf("%ld", &key);
+        //scanf("%ld %s", &key, c);
+        //db_insert(key, c);
+        printf("Located at %d\n", db_find(key));
+    }
 }
 
 /*
