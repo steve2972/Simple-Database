@@ -129,22 +129,26 @@ node * insert_into_leaf( node * leaf, int key, record * pointer );
 offset_t insertIntoLeaf(offset_t leaf, Record * record);
 
 
-node * insert_into_leaf_after_splitting(node * root, node * leaf, int key,
-                                        record * pointer);
+node * insert_into_leaf_after_splitting(node * root, node * leaf, int key, record * pointer);
 offset_t insertIntoLeafAfterSplitting(offset_t root, offset_t leaf, Record * record);
 
-node * insert_into_node(node * root, node * parent, 
-        int left_index, int key, node * right);
+node * insert_into_node(node * root, node * parent, int left_index, int key, node * right);
+offset_t insertIntoNode(offset_t root, offset_t parent, int left, keyNum key, offset_t right);
 
-node * insert_into_node_after_splitting(node * root, node * parent,
-                                        int left_index,
-        int key, node * right);
+node * insert_into_node_after_splitting(node * root, node * parent, int left_index, int key, node * right);
+offset_t insertIntoNodeAfterSplitting(offset_t root, offset_t parent, int left_index, keyNum key, offset_t right);
+
 node * insert_into_parent(node * root, node * left, int key, node * right);
-offset_t insertIntoParent(offset_t root, offset_t left, int key, offset_t right);
-node * insert_into_new_root(node * left, int key, node * right);
-node * start_new_tree(int key, record * pointer);
-node * insert( node * root, keyNum key, char * value );
+offset_t insertIntoParent(offset_t root, offset_t left, keyNum key, offset_t right);
 
+node * insert_into_new_root(node * left, int key, node * right);
+offset_t insertIntoNewRoot(offset_t left, keyNum key, offset_t right);
+
+node * start_new_tree(int key, record * pointer);
+offset_t startNewTree(Record * record);
+
+node * insert( node * root, keyNum key, char * value );
+offset_t Insert(offset_t root, Record * record);
 
 
 

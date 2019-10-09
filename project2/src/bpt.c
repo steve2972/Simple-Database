@@ -241,7 +241,7 @@ void find_and_print(node * root, int key, bool verbose) {
     if (r == NULL)
         printf("Record not found under key %d.\n", key);
     else 
-        printf("Record at %lx -- key %d, value %d.\n",
+        printf("Record at %lx -- key %d, value %s.\n",
                 (unsigned long)r, key, r->value);
 }
 
@@ -261,7 +261,7 @@ void find_and_print_range( node * root, int key_start, int key_end,
         printf("None found.\n");
     else {
         for (i = 0; i < num_found; i++)
-            printf("Key: %d   Location: %lx  Value: %d\n",
+            printf("Key: %d   Location: %lx  Value: %s\n",
                     returned_keys[i],
                     (unsigned long)returned_pointers[i],
                     ((record *)
@@ -454,10 +454,10 @@ int get_left_index(node * parent, node * left) {
 int getLeftIndex(pagenum_t parent, pagenum_t left) {
     int left_index = 0;
 
-    page_t parent;
-    file_read_page(parent, &parent);
-    while (left_index <= getNumKeys(&parent) && 
-            getEntryOffset(&parent, left_index) != left_index) {
+    page_t parentPage;
+    file_read_page(parent, &parentPage);
+    while (left_index <= getNumKeys(&parentPage) && 
+            getEntryOffset(&parentPage, left_index) != left_index) {
             
             left_index++;
     }
@@ -515,7 +515,8 @@ offset_t insertIntoLeaf(offset_t leaf, Record * record) {
     // Insert into insertion_point
     setKey(&leafPage, record->key, insertion_point);
     setRecordValue(&leafPage, record->value, insertion_point);
-    setNumkeys(&leafPage, leafPage.node.header.NumKeys + 1);
+    keyNum keys = leafPage.node.header.NumKeys + 1;
+    setNumKeys(&leafPage, keys);
 
     file_write_page(leaf, &leafPage);
     return leaf;
@@ -625,22 +626,22 @@ offset_t insertIntoLeafAfterSplitting(offset_t root, offset_t leaf, Record * rec
 
     int temp = 0;   // Use temp to dynamically get the number of keys;
     for (i = 0; i < split; i++) {
-        setRecordValue(&leafPage, i, temp_records[i]);
+        setRecordValue(&leafPage, temp_records[i], i);
         setKey(&leafPage, temp_keys[i], i);
-        setNumkeys(&leafPage, ++temp);
+        temp++;
+        setNumKeys(&leafPage, temp);
     }
     temp = 0;
     for (i = split, j = 0; i < order; i++, j++) {
-        setRecordValue(&newLeafPage, j, temp_records[i]);
+        setRecordValue(&newLeafPage, temp_records[i], j);
         setKey(&newLeafPage, temp_keys[i], j);
-        setNumkeys(&newLeafPage, ++temp);
+        temp++;
+        setNumKeys(&newLeafPage, temp);
     }
 
-    free(temp_records);
-    free(temp_keys);
 
-    setEntryOffset(&newLeafPage, getEntryOffset(&leafPage, LEAF_ORDER-1), LEAF_ORDER-1);
-    setEntryOffset(&leafPage, newLeafOffset, LEAF_ORDER-1);
+    setSiblingOffset(&newLeafPage, getEntryOffset(&leafPage, LEAF_ORDER-1), LEAF_ORDER-1);
+    setSiblingOffset(&leafPage, newLeafOffset, LEAF_ORDER-1);
 
     for (i = getNumKeys(&leafPage); i < LEAF_ORDER-1; i++) {
         setKey(&leafPage, 0, i);
@@ -661,12 +662,6 @@ offset_t insertIntoLeafAfterSplitting(offset_t root, offset_t leaf, Record * rec
     return insertIntoParent(root, leaf, new_key, newLeafOffset);
 }
 
-
-
-/* Inserts a new key and pointer to a node
- * into a node into which these can fit
- * without violating the B+ tree properties.
- */
 node * insert_into_node(node * root, node * n, 
         int left_index, int key, node * right) {
     int i;
@@ -678,6 +673,25 @@ node * insert_into_node(node * root, node * n,
     n->pointers[left_index + 1] = right;
     n->keys[left_index] = key;
     n->num_keys++;
+    return root;
+}
+
+offset_t insertIntoNode(offset_t root, offset_t parent, int left_index, keyNum key, offset_t right) {
+    int i;
+
+    page_t parentPage;
+    file_read_page(parent, &parentPage);
+    for (i = getNumKeys(&parentPage); i > left_index; i--) {
+        setSiblingOffset(&parentPage, getEntryOffset(&parentPage, i), i+1);
+        setKey(&parentPage, getKey(&parentPage, i-1), i);
+    }
+    setSiblingOffset(&parentPage, right, left_index + 1);
+    setKey(&parentPage, key, left_index);
+    keyNum numKeys = getNumKeys(&parentPage) + 1;
+    setNumKeys(&parentPage, numKeys);
+    
+    file_write_page(parent, &parentPage);
+
     return root;
 }
 
@@ -762,6 +776,70 @@ node * insert_into_node_after_splitting(node * root, node * old_node, int left_i
 
     return insert_into_parent(root, old_node, k_prime, new_node);
 }
+offset_t insertIntoNodeAfterSplitting(offset_t root, offset_t parent, int left_index, keyNum key, offset_t right) {
+    int i, j, split, k_prime, keys;
+    offset_t new_node, child_offset;
+    keyNum temp_keys[INTERNAL_ORDER];
+    offset_t temp_pointers[INTERNAL_ORDER+1];
+
+    page_t parentPage, newNode, child;
+    file_read_page(parent, &parentPage);
+
+    keys = getNumKeys(&parentPage);
+
+    for (i = 0, j = 0; i < keys + 1; i++, j++) {
+        if (j == left_index + 1) j++;
+        temp_pointers[j] = getEntryOffset(&parentPage, i);
+    }
+
+    for (i = 0, j = 0; i < keys; i++, j++) {
+        if (j == left_index) j++;
+        temp_keys[j] = getKey(&parentPage, i);
+    }
+
+    temp_pointers[left_index + 1] = right;
+    temp_keys[left_index] = key;
+
+    split = cut(INTERNAL_ORDER);
+
+    new_node = createInternalPage();
+    file_read_page(new_node, &newNode);
+
+    keys = 0;
+    for (i = 0; i < split - 1; i++) {
+        setSiblingOffset(&parentPage, temp_pointers[i], i);
+        setKey(&parentPage, temp_keys[i], i);
+        keys++;
+        setNumKeys(&parentPage, keys);
+    }
+
+    setEntryOffset(&parentPage, split-1, temp_pointers[split-1]);
+    k_prime = temp_keys[split - 1];
+    keys = 0;
+
+    for (++i, j = 0; i < order; i++, j++) {
+        setSiblingOffset(&newNode, j, temp_pointers[i]);
+        setKey(&newNode, j, temp_keys[i]);
+        keys++;
+        setNumKeys(&newNode, keys);
+    }
+    setSiblingOffset(&newNode, j, temp_pointers[i]);
+
+    setParentPageNum(&newNode, getParentPageNum(&parentPage));
+
+    for (i = 0; i <= getNumKeys(&newNode); i++) {
+        child_offset = getEntryOffset(&newNode, i);
+        file_read_page(child_offset, &child);
+        setParentPageNum(&child, new_node);
+        file_write_page(child_offset, &child);
+    }
+    
+    // Write to memory
+    file_write_page(new_node, &newNode);
+    file_write_page(parent, &parentPage);
+
+    return insertIntoParent(root, parent, k_prime, new_node);
+}
 
 
 
@@ -803,6 +881,45 @@ node * insert_into_parent(node * root, node * left, int key, node * right) {
 
     return insert_into_node_after_splitting(root, parent, left_index, key, right);
 }
+offset_t insertIntoParent(offset_t root, offset_t left, keyNum key, offset_t right) {
+    int left_index;
+    offset_t parent;
+    page_t parentPage, leftPage;
+
+    // parent = left->parent
+    file_read_page(left, &leftPage);
+
+    parent = getParentPageNum(&leftPage);
+
+    /* Case: new root. */
+
+    if (parent == 0)// Parent is equal to the header page => empty tree
+        return insertIntoNewRoot(left, key, right);
+
+    /* Case: leaf or node. (Remainder of
+     * function body.)  
+     */
+
+    /* Find the parent's pointer to the left 
+     * node.
+     */
+
+    left_index = getLeftIndex(parent, left);
+    file_read_page(parent, &parentPage);
+
+    /* Simple case: the new key fits into the node. 
+     */
+
+    if (getNumKeys(&parentPage) < INTERNAL_ORDER - 1)
+        return insertIntoNode(root, parent, left_index, key, right);
+
+    /* Harder case:  split a node in order 
+     * to preserve the B+ tree properties.
+     */
+
+    return insertIntoNodeAfterSplitting(root, parent, left_index, key, right);
+}
+
 
 
 /* Creates a new root for two subtrees
@@ -821,9 +938,30 @@ node * insert_into_new_root(node * left, int key, node * right) {
     right->parent = root;
     return root;
 }
+offset_t insertIntoNewRoot(offset_t left, keyNum key, offset_t right) {
+    page_t rootPage;
+    offset_t root = createInternalPage();
+    // Need the pages of the left and right offsets
+    page_t leftPage, rightPage;
 
+    file_read_page(left, &leftPage);
+    file_read_page(right, &rightPage);
+    file_read_page(root, &rootPage);
 
+    setKey(&rootPage, key, 0);
+    setSiblingOffset(&rootPage, left, 0);
+    setSiblingOffset(&rootPage, right, 1);    
+    setNumKeys(&rootPage, 1);
+    setParentPageNum(&rootPage, 0);
+    setParentPageNum(&leftPage, root);
+    setParentPageNum(&rightPage, root);
 
+    file_write_page(root, &rootPage);
+    file_write_page(left, &leftPage);
+    file_write_page(right, &rightPage);
+
+    return root;
+}
 /* First insertion:
  * start a new tree.
  */
@@ -837,7 +975,23 @@ node * start_new_tree(int key, record * pointer) {
     root->num_keys++;
     return root;
 }
+offset_t startNewTree(Record * record) {
+    offset_t root = createLeafPage();
+    page_t temp;
 
+    file_read_page(root, &temp);
+
+    setKey(&temp, record->key, 0);
+    setRecordValue(&temp, record->value, 0);
+    setNumKeys(&temp, 1);
+    
+    setRootPageOffset(&header, root);
+    
+    file_write_page(0, &header);
+    file_write_page(root, &temp);
+
+    return root;
+}
 
 
 /* Master insertion function.
@@ -891,6 +1045,59 @@ node * insert( node * root, keyNum key, char * value) {
      */
 
     return insert_into_leaf_after_splitting(root, leaf, key, pointer);
+}
+offset_t Insert(offset_t root, Record * record) {
+    Record * pointer = (Record *)malloc(sizeof(Record));
+    page_t leaf;
+
+    /* The current implementation ignores
+     * duplicates.
+     */
+
+    if (findRecord(root, record->key) != NULL)
+        return root;
+
+    /* Create a new record for the
+     * value.
+     */
+    pointer->key = record->key;
+    strcpy(pointer->value, record->value);
+
+
+
+    /* Case: the tree does not exist yet.
+     * Start a new tree.
+     */
+
+    if (root == 0) 
+        return startNewTree(pointer);
+
+
+    /* Case: the tree already exists.
+     * (Rest of function body.)
+     */
+
+    offset_t leaf_offset = findLeaf(root, record->key);
+    if (leaf_offset == 0) {
+        return root;        // final check to see if leaf exists
+    }
+    file_read_page(leaf_offset, &leaf);
+
+    /* Case: leaf has room for key and pointer.
+     */
+
+    if (getNumKeys(&leaf) < LEAF_ORDER -1) {
+        insertIntoLeaf(leaf_offset, record);
+        return root;
+    }
+
+
+    /* Case:  leaf must be split.
+     */
+
+    return insertIntoLeafAfterSplitting(root, leaf_offset, record);
+
+
 }
 
 
