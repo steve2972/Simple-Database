@@ -168,18 +168,19 @@ offset_t getEntryOffset(page_t * page, int index);
     // Setters
 int setParentPageNum(page_t * page, offset_t offset);
 int LeafToggle(page_t * page); // if 1 -> 0. if 0 -> 1
-int setNumkeys(page_t * page, int keys);
+int setNumKeys(page_t * page, int keys);
 int setEntryOffset(page_t * page, offset_t offset, int index);
+int setSiblingOffset(page_t * page, offset_t offset, int index);
 int setRecordValue(page_t * page, char * value, int index);
 int setKey(page_t * page, keyNum key, int index);
 
 // Utility Functions
-int PageType(page_t page);    // returns the type of page
 int findEmptyEntryIndex(page_t * page);
 int findEmptyRecordIndex(page_t * page);
 int findEntryByKey(page_t * page, keyNum key);
 int findRecordByKey(page_t * page, keyNum key);
 int search(page_t * page, keyNum key);
+Record * makeRecord(keyNum key, char * value);
 
 
 

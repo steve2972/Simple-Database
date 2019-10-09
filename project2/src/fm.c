@@ -135,12 +135,15 @@ pagenum_t file_alloc_page() {
             nextFreePage++;
             // set the next free page to either nextfreepage or 0 (beginning)
             setNextFreePage(&tempFree, i < 2 ? nextFreePage:0);
-            file_write_page(nextFreePage, &tempFree);
+            file_write_page(nextFreePage-1, &tempFree);
         }
 
         // Synchronize the header page
         setNumPages(&header, getNumPages(&header) + 2);
+
         file_write_page(0, &header);
+
+        return nextFreePage - 2;
     }
 
     /* Use alloc page whenever creating a new leaf page or internal page
@@ -277,7 +280,7 @@ offset_t getOneMorePage(page_t * page) {
 int copyRecord(page_t * page, int index, char * dest) {
     // Copies contents of the record into the destination
     // On-disk => in memory
-    char * src = ((const NodePage *)page)->records[index].value;
+    char * src = page->node.records[index].value;
     strcpy(dest, src);
     // Return 1 if successfully copied
     return strcmp(dest, src) == 0 ? 1 : 0;
@@ -380,6 +383,28 @@ int setEntryOffset(page_t * page, offset_t offset, int index) {
 
     return page->node.entries[index].page == offset ? 1 : 0;
 }
+int setSiblingOffset(page_t * page, offset_t offset, int index) {
+    if (!isLeaf(page)) {
+        if (index > INTERNAL_ORDER - 1) {
+            return -1;
+        }
+        else if (index == 0) {
+            page->node.header.sibling = offset;
+        }
+        else {
+            page->node.entries[index].page = offset;
+        }
+
+        return 1;
+    }
+    else {
+        if (index == LEAF_ORDER-1) {
+            page->node.header.sibling = offset;
+            return 1;
+        }
+        return -1;
+    }
+}
 int setRecordValue(page_t * page, char * value, int index) {
     strcpy(page->node.records[index].value, value);
 
@@ -399,21 +424,6 @@ int setKey(page_t * page, keyNum key, int index) {
 
 
 // Utility Functions
-
-// @param[out]: 0 if header, 1 if free, 2 if node, 3 if unknown
-int PageType(page_t page) {
-    // Check which parameters are initialized
-    if (page.hp.numPages != NULL) {
-        return 0;
-    }
-    else if (page.fp.NextFreePage != NULL) {
-        return 1;
-    }
-    else if (page.node.header.isLeaf != NULL) {
-        return 2;
-    }
-    return 3;
-}
 
 int findEmptyEntryIndex(page_t * page) {
     for (int i = 0; i < INTERNAL_ORDER -1; i++) {
@@ -470,4 +480,10 @@ int search(page_t * page, keyNum key) {
             right = middle;
     }
     return -1;
+}
+Record * makeRecord(keyNum keynum, char * value) {
+    Record * record = (Record *)malloc(sizeof(Record));
+    record->key = keynum;
+    strcpy(record->value, value);
+    return record;
 }
