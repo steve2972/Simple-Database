@@ -956,6 +956,10 @@ offset_t insertIntoNewRoot(offset_t left, keyNum key, offset_t right) {
     setParentPageNum(&leftPage, root);
     setParentPageNum(&rightPage, root);
 
+    // Remember to reset the root into the new root
+    setRootPageOffset(&header, root);
+    file_write_page(0, &header);
+
     file_write_page(root, &rootPage);
     file_write_page(left, &leftPage);
     file_write_page(right, &rightPage);
@@ -1130,6 +1134,45 @@ int get_neighbor_index( node * n ) {
     printf("Node:  %#lx\n", (unsigned long)n);
     exit(EXIT_FAILURE);
 }
+keyNum getNeighborIndex(offset_t n) {
+    int i;
+
+    /* Return the index of the key to the left
+     * of the pointer in the parent pointing
+     * to n.  
+     * If n is the leftmost child, this means
+     * return -1.
+     */
+
+    //TODO: fix and check logic of this code
+
+    int num_keys;
+    page_t neighbor;
+    offset_t c = n;
+    file_read_page(c, &neighbor);
+
+    c = getParentPageNum(&neighbor);
+    file_read_page(c, &neighbor);
+    i = 0, num_keys = getNumKeys(&neighbor);
+    while(i<=num_keys && n != getEntryOffset(&neighbor, i)){
+        i++;
+    }
+    if(i!=0)
+        return getOffset(&neighbor, i-1);
+    else{
+        c = getParentPageNum(&neighbor);
+        while(c != 0){
+            file_read_page(c, &neighbor);
+            if(isLeaf(&neighbor))
+                return c;
+            num_keys = getNumKeys(&neighbor);
+            c = getEntryOffset(&neighbor, num_keys);
+        }
+    }
+
+    return 0; 
+
+}
 
 
 node * remove_entry_from_node(node * n, int key, node * pointer) {
@@ -1166,6 +1209,38 @@ node * remove_entry_from_node(node * n, int key, node * pointer) {
             n->pointers[i] = NULL;
 
     return n;
+}
+offset_t removeEntryFromNode(offset_t leaf, Record * record) {
+    int deletion_point;
+    page_t leafPage;
+    file_read_page(leaf, &leafPage);
+
+
+    // Remove the key and shift other keys accordingly.
+    deletion_point = search(&leafPage, record->key);
+    char temp[120];
+    for(int i = deletion_point; i < getNumKeys(&leafPage); i++) {
+        setKey(&leafPage, getKey(&leafPage, i+1), i);
+        copyRecord(&leafPage, i+1, temp);
+        setRecordValue(&leafPage, temp, i);
+
+        if (i == getNumKeys(&leafPage) - 1) {
+            setKey(&leafPage, 0, i);
+            setRecordValue(&leafPage, "", i);
+        }
+    }
+
+    // One key fewer.
+    int numkeys = getNumKeys(&leafPage) - 1;
+    setNumKeys(&leafPage, numkeys);
+
+    // Set the other pointers to NULL for tidiness.
+    // A leaf uses the last pointer to point to the next leaf.
+
+    // --> implemented in the above for loop
+
+    file_write_page(leaf, &leafPage);
+    return leaf;
 }
 
 
@@ -1205,7 +1280,46 @@ node * adjust_root(node * root) {
 
     return new_root;
 }
+offset_t adjustRoot(offset_t root) {
+    offset_t new_root;
+    page_t old_root, new_root_page;
+    file_read_page(root, &old_root);
 
+    /* Case: nonempty root.
+     * Key and pointer have already been deleted,
+     * so nothing to be done.
+     */
+    
+    if(getNumKeys(&old_root) > 0) {
+        return root;
+    }
+
+    /* Case: empty root. 
+     */
+
+    // If it has a child, promote 
+    // the first (only) child
+    // as the new root.
+
+    if (!isLeaf(&old_root)) {
+        new_root = getEntryOffset(&old_root, 0);
+        file_read_page(new_root, &new_root_page);
+        setParentPageNum(&new_root_page, 0);
+        file_write_page(new_root, &new_root_page);
+
+        // Synchronize the header page
+        setRootPageOffset(&header, new_root);
+        file_write_page(0, &header);
+    }
+    // If it is a leaf (has no children),
+    // then the whole tree is empty.
+    else
+        new_root = 0;   // set the new root to the header page
+
+    file_free_page(root);
+
+    return new_root;
+}
 
 /* Coalesces a node that has become
  * too small after deletion
@@ -1295,7 +1409,111 @@ node * coalesce_nodes(node * root, node * n, node * neighbor, int neighbor_index
     free(n); 
     return root;
 }
+offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbor_index, int k_prime) {
+    // Note: n= node we are deleting
+    int i, j, neighbor_insertion_index, n_end;
+    keyNum numKeys;
+    page_t freePage, parentPage, tmp, neighborPage;
+    offset_t parentOffset;
+    
+    // Initialize pages
+    file_read_page(n, &freePage);
+    parentOffset = getParentPageNum(&freePage);
+    file_read_page(parentOffset, &parentPage);
+    file_read_page(neighbor, &neighborPage);
 
+    //TODO: add when parent offset = 0
+
+    /* Swap neighbor with node if node is on the
+     * extreme left and neighbor is to its right.
+     */
+
+    if (neighbor_index == -1) {
+        // Switch neighbor and n
+        file_write_page(n, &neighborPage);
+        file_write_page(neighbor, &freePage);
+    }
+
+    /* Starting point in the neighbor for copying
+     * keys and pointers from n.
+     * Recall that n and neighbor have swapped places
+     * in the special case of n being a leftmost child.
+     */
+
+    file_read_page(n, &freePage);
+    file_read_page(neighbor, &neighborPage);
+    neighbor_insertion_index = getNumKeys(&neighborPage);
+
+    /* Case:  nonleaf node.
+     * Append k_prime and the following pointer.
+     * Append all pointers and keys from the neighbor.
+     */
+
+    if (!isLeaf(&freePage)) {
+
+        /* Append k_prime.
+         */
+        setKey(&neighborPage, k_prime, neighbor_insertion_index);
+        setNumKeys(&neighborPage, getNumKeys(&neighborPage) + 1);
+
+        n_end = getNumKeys(&freePage);
+
+        keyNum numKeysNeighbor = getNumKeys(&neighborPage);
+        keyNum numKeysFreePage = n_end;
+        for (i = neighbor_insertion_index + 1, j = 0; j < n_end; i++, j++) {
+            setKey(&neighborPage, getKey(&freePage, j), i);
+            char tempVal[120];
+            copyRecord(&freePage, j, tempVal);
+            setRecordValue(&neighborPage, tempVal, i);
+            setNumKeys(&neighborPage, ++numKeysNeighbor);
+            
+            setNumKeys(&freePage, --numKeysFreePage);
+        }
+
+        /* The number of pointers is always
+         * one more than the number of keys.
+         */
+        
+        char tempVal[120];
+        copyRecord(&freePage, j, tempVal);
+        setRecordValue(&neighborPage, tempVal, i);
+        /* All children must now point up to the same parent.
+         */
+
+        for (i = 0; i < getNumKeys(&neighborPage) + 1; i++) {
+            file_read_page(neighborPage.node.entries[i].page, &tmp);
+            setParentPageNum(&tmp, neighbor);
+            file_write_page(neighborPage.node.entries[i].page, &tmp);
+        }
+    }
+
+    /* In a leaf, append the keys and pointers of
+     * n to the neighbor.
+     * Set the neighbor's last pointer to point to
+     * what had been n's right neighbor.
+     */
+
+    else {
+        int numKeysNeighbor = getNumKeys(&neighborPage);
+        for (i = neighbor_insertion_index, j = 0; j < getNumKeys(&freePage); i++, j++) {
+            setKey(&neighborPage, getKey(&freePage, j), i);
+            char tempVal[120];
+            copyRecord(&freePage, j, tempVal);
+            setRecordValue(&neighborPage, tempVal, i);
+            setNumKeys(&neighborPage, ++numKeysNeighbor);
+
+        }
+        char tempVal[120];
+        copyRecord(&freePage, INTERNAL_ORDER - 1, tempVal);
+        setRecordValue(&neighborPage, tempVal, INTERNAL_ORDER-1);
+    }
+
+    //TODO: check logic of this code
+    Record * record = makeRecord(k_prime, n);
+    root = deleteEntry(root, getParentPageNum(&freePage), record);
+ 
+    return root;
+}
 
 /* Redistributes entries between two nodes when
  * one has become too small after deletion
@@ -1374,6 +1592,13 @@ node * redistribute_nodes(node * root, node * n, node * neighbor, int neighbor_i
     return root;
 }
 
+/*
+ * I will not implement redistribute nodes in my B+ tree because
+ * I will be using a delayed merge, where the tree does not merge the leaves
+ * unless there are no longer any entries in the node.
+ * 
+ * In this case, we only need to coalesce nodes.
+ */
 
 /* Deletes an entry from the B+ tree.
  * Removes the record and its key and pointer
@@ -1431,6 +1656,76 @@ node * delete_entry( node * root, node * n, int key, void * pointer ) {
     neighbor_index = get_neighbor_index( n );
     k_prime_index = neighbor_index == -1 ? 0 : neighbor_index;
     k_prime = n->parent->keys[k_prime_index];
+    neighbor = neighbor_index == -1 ? n->parent->pointers[1] : 
+        n->parent->pointers[neighbor_index];
+
+    capacity = n->is_leaf ? order : order - 1;
+
+    /* Coalescence. */
+
+    if (neighbor->num_keys + n->num_keys < capacity)
+        return coalesce_nodes(root, n, neighbor, neighbor_index, k_prime);
+
+    /* Redistribution. */
+
+    else
+        return redistribute_nodes(root, n, neighbor, neighbor_index, k_prime_index, k_prime);
+}
+offset_t deleteEntry(offset_t root, offset_t n, Record * record) {
+    keyNum min_keys;
+    offset_t neighbor;
+    keyNum neighbor_index;
+    keyNum k_prime_index, k_prime;
+    keyNum capacity;
+
+    page_t deletionPage;
+    file_read_page(n, &deletionPage);
+
+    // Remove key and pointer from node.
+    n = removeEntryFromNode(n, record);
+
+    /* Case:  deletion from the root. 
+     */
+
+    if (n == root) 
+        return adjustRoot(root);
+
+
+    /* Case:  deletion from a node below the root.
+     * (Rest of function body.)
+     */
+
+    /* Determine minimum allowable size of node,
+     * to be preserved after deletion.
+     */
+
+    min_keys = 1;   // Minimum allowable size of node = 0 (delyaed merge)
+
+    /* Case:  node stays at or above minimum.
+     * (The simple case.)
+     */
+
+    if (getNumKeys(&deletionPage) >= min_keys)
+        return root;
+
+    /* Case:  node falls below minimum.
+     * Either coalescence or redistribution
+     * is needed.
+     */
+
+    /* Find the appropriate neighbor node with which
+     * to coalesce.
+     * Also find the key (k_prime) in the parent
+     * between the pointer to node n and the pointer
+     * to the neighbor.
+     */
+
+    neighbor_index = getNeighborIndex(n);
+    k_prime_index = neighbor_index == -1 ? 0 : neighbor_index;
+    offset_t nParent = getParentPageNum(&deletionPage);
+    page_t nParentPage;
+    file_read_page(nParent, &nParentPage);
+    k_prime = getKey(&nParentPage, k_prime_index);
     neighbor = neighbor_index == -1 ? n->parent->pointers[1] : 
         n->parent->pointers[neighbor_index];
 

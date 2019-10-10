@@ -26,7 +26,6 @@
  * to change the type and content
  * of the value field.
  */
-typedef uint64_t keyNum;
 typedef struct record {
     keyNum key;
     char value[120];
@@ -114,7 +113,8 @@ record * find( node * root, int key, bool verbose );
 Record * findRecord(pagenum_t root, keyNum key);
 
 int cut( int length );
-// Insertion.
+
+/* INSERTION*/
 
 record * make_record(keyNum key, char * value);
 node * make_node( void );
@@ -152,16 +152,30 @@ offset_t Insert(offset_t root, Record * record);
 
 
 
-// Deletion.
+/*  DELETION*/
+
 int get_neighbor_index( node * n );
+keyNum getNeighborIndex(offset_t n);
+
+node * remove_entry_from_node(node * n, int key, node * pointer);
+offset_t removeEntryFromNode(offset_t leaf, Record * record);
+
 node * adjust_root(node * root);
-node * coalesce_nodes(node * root, node * n, node * neighbor,
-                      int neighbor_index, int k_prime);
-node * redistribute_nodes(node * root, node * n, node * neighbor,
-                          int neighbor_index,
-        int k_prime_index, int k_prime);
+offset_t adjustRoot(offset_t root);
+
+node * coalesce_nodes(node * root, node * n, node * neighbor, int neighbor_index, int k_prime);
+offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbor_index, int k_prime);
+
+node * redistribute_nodes(node * root, node * n, node * neighbor, int neighbor_index, int k_prime_index, int k_prime);
+// Do not need redistributeNodes!!!
+offset_t redistributeNodes(offset_t root, offset_t n, offset_t neighbor, keyNum neighbor_index, keyNum k_prime_index, keyNum k_prime);
+
 node * delete_entry( node * root, node * n, int key, void * pointer );
+offset_t deleteEntry(offset_t root, offset_t n, Record * record);
+
 node * delete( node * root, int key );
 void destroy_tree_nodes(node * root);
 node * destroy_tree(node * root);
+
+
 #endif /* __BPT_H__*/
