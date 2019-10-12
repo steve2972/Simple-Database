@@ -173,7 +173,11 @@ offset_t redistributeNodes(offset_t root, offset_t n, offset_t neighbor, keyNum 
 node * delete_entry( node * root, node * n, int key, void * pointer );
 offset_t deleteEntry(offset_t root, offset_t n, Record * record);
 
-node * delete( node * root, int key );
+offset_t deleteRecord(offset_t root, keyNum key);
+
+node * _delete( node * root, int key );
+offset_t delete(keyNum key);
+
 void destroy_tree_nodes(node * root);
 node * destroy_tree(node * root);
 

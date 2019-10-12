@@ -1672,81 +1672,36 @@ node * delete_entry( node * root, node * n, int key, void * pointer ) {
         return redistribute_nodes(root, n, neighbor, neighbor_index, k_prime_index, k_prime);
 }
 offset_t deleteEntry(offset_t root, offset_t n, Record * record) {
-    keyNum min_keys;
-    offset_t neighbor;
-    keyNum neighbor_index;
-    keyNum k_prime_index, k_prime;
-    keyNum capacity;
+    keyNum numKeys = removeEntryFromNode(n, record);
 
-    page_t deletionPage;
-    file_read_page(n, &deletionPage);
-
-    // Remove key and pointer from node.
-    n = removeEntryFromNode(n, record);
-
-    /* Case:  deletion from the root. 
-     */
-
-    if (n == root) 
+    if (n == root) {
         return adjustRoot(root);
+    }
 
+    if (numKeys < 1) {
+        return coalesceNodes(root, n);
+    }
+}
 
-    /* Case:  deletion from a node below the root.
-     * (Rest of function body.)
-     */
+offset_t deleteRecord(offset_t root, keyNum key) {
+    offset_t deletionKey;
+    Record * deletionRecord;
 
-    /* Determine minimum allowable size of node,
-     * to be preserved after deletion.
-     */
+    deletionRecord = findRecord(root, key);
+    deletionKey = findLeaf(root, key);
 
-    min_keys = 1;   // Minimum allowable size of node = 0 (delyaed merge)
+    if (deletionRecord != NULL && deletionKey != 0) {
+        root = deleteEntry(root, deletionKey, deletionRecord);
+    }
 
-    /* Case:  node stays at or above minimum.
-     * (The simple case.)
-     */
-
-    if (getNumKeys(&deletionPage) >= min_keys)
-        return root;
-
-    /* Case:  node falls below minimum.
-     * Either coalescence or redistribution
-     * is needed.
-     */
-
-    /* Find the appropriate neighbor node with which
-     * to coalesce.
-     * Also find the key (k_prime) in the parent
-     * between the pointer to node n and the pointer
-     * to the neighbor.
-     */
-
-    neighbor_index = getNeighborIndex(n);
-    k_prime_index = neighbor_index == -1 ? 0 : neighbor_index;
-    offset_t nParent = getParentPageNum(&deletionPage);
-    page_t nParentPage;
-    file_read_page(nParent, &nParentPage);
-    k_prime = getKey(&nParentPage, k_prime_index);
-    neighbor = neighbor_index == -1 ? n->parent->pointers[1] : 
-        n->parent->pointers[neighbor_index];
-
-    capacity = n->is_leaf ? order : order - 1;
-
-    /* Coalescence. */
-
-    if (neighbor->num_keys + n->num_keys < capacity)
-        return coalesce_nodes(root, n, neighbor, neighbor_index, k_prime);
-
-    /* Redistribution. */
-
-    else
-        return redistribute_nodes(root, n, neighbor, neighbor_index, k_prime_index, k_prime);
+    return root;
 }
 
 
 
 /* Master deletion function.
  */
-node * delete(node * root, int key) {
+node * _delete(node * root, int key) {
 
     node * key_leaf;
     record * key_record;
@@ -1758,6 +1713,11 @@ node * delete(node * root, int key) {
         free(key_record);
     }
     return root;
+}
+offset_t delete(keyNum key) {
+    file_read_page(0, &header);
+
+    offset_t root = deleteEntry(getRootPageOffset(&header), key);
 }
 
 
