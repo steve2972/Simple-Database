@@ -17,15 +17,15 @@
 #include "fm.h"
 #include "bpt.h"
 
-extern page_t head;
-extern page_t root_page;
-
 // Database IO
 
 int open_table(char* pathname);
 int db_insert(int64_t key, char* value);
 int db_find(int64_t key);
 int db_delete(int64_t key);
+
+int db_print();
+int db_print_leaves();
 
 
 #endif /*__DBM_H__*/

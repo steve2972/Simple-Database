@@ -2,76 +2,23 @@
 
 int main( int argc, char ** argv ) {
     open_table("test.db");
-    
-
-    while(1) {
-        char c[120], op;
-        keyNum key;
-        printf("> ");
-        scanf("%ld", &key);
-        //scanf("%ld %s", &key, c);
-        //db_insert(key, c);
-        printf("Located at %d\n", db_find(key));
-    }
-}
-
-/*
-    char * input_file;
-    FILE * fp;
-    node * root;
-    int input, range2;
     char instruction;
-    char license_part;
-
-    root = NULL;
-    verbose_output = false;
-
-    if (argc > 1) {
-        order = atoi(argv[1]);
-        if (order < MIN_ORDER || order > MAX_ORDER) {
-            fprintf(stderr, "Invalid order: %d .\n\n", order);
-            usage_3();
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    license_notice();
-    usage_1();  
-    usage_2();
-
-    if (argc > 2) {
-        input_file = argv[2];
-        fp = fopen(input_file, "r");
-        if (fp == NULL) {
-            perror("Failure  open input file.");
-            exit(EXIT_FAILURE);
-        }
-        while (!feof(fp)) {
-            fscanf(fp, "%d\n", &input);
-            root = insert(root, input, input);
-        }
-        fclose(fp);
-        print_tree(root);
-    }
-
+    keyNum key;
+    char input[120];
     printf("> ");
     while (scanf("%c", &instruction) != EOF) {
         switch (instruction) {
         case 'd':
-            scanf("%d", &input);
-            root = delete(root, input);
-            print_tree(root);
+            scanf("%ld", &key);
+            db_delete(key);
+            db_print();
             break;
         case 'i':
-            scanf("%d", &input);
-            root = insert(root, input, input);
-            print_tree(root);
+            scanf("%ld %s", &key, input);
             break;
         case 'f':
-        case 'p':
-            scanf("%d", &input);
-            find_and_print(root, input, instruction == 'p');
-            break;
+            scanf("%ld", &key);
+            db_find(key);
         case 'r':
             scanf("%d %d", &input, &range2);
             if (input > range2) {
@@ -82,31 +29,24 @@ int main( int argc, char ** argv ) {
             find_and_print_range(root, input, range2, instruction == 'p');
             break;
         case 'l':
-            print_leaves(root);
+            db_print_leaves();
             break;
         case 'q':
             while (getchar() != (int)'\n');
-            return EXIT_SUCCESS;
+            return 1;
             break;
         case 't':
-            print_tree(root);
+            db_print();
             break;
-        case 'v':
-            verbose_output = !verbose_output;
-            break;
-        case 'x':
-            if (root)
-                root = destroy_tree(root);
-            print_tree(root);
+        case '?':
+            usage();
             break;
         default:
-            usage_2();
+            usage();
             break;
         }
         while (getchar() != (int)'\n');
         printf("> ");
     }
     printf("\n");
-
-    return EXIT_SUCCESS;
-    */
+}

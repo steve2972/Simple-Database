@@ -73,7 +73,7 @@ int order = DEFAULT_ORDER;
  * printing each entire rank on a separate
  * line, finishing with the leaves.
  */
-node * queue = NULL;
+pageNode * queue = NULL;
 
 /* The user can toggle on and off the "verbose"
  * property, which causes the pointer addresses
@@ -87,35 +87,55 @@ bool verbose_output = false;
 
 // OUTPUT AND UTILITIES
 
-
-/* Helper function for printing the
- * tree out.  See print_tree.
- */
-void enqueue( node * new_node ) {
-    node * c;
-    if (queue == NULL) {
-        queue = new_node;
-        queue->next = NULL;
-    }
-    else {
-        c = queue;
-        while(c->next != NULL) {
-            c = c->next;
-        }
-        c->next = new_node;
-        new_node->next = NULL;
-    }
+void usage(void) {
+    printf( "Enter any of the following commands after the prompt > :\n"
+            "\ti <k>  -- Insert <k> (an integer) as both key and value).\n"
+            "\tf <k>  -- Find the value under key <k>.\n"
+            "\tp <k> -- Print the path from the root to key k and its associated value.\n"
+            "\tr <k1> <k2> -- Print the keys and values found in the range [<k1>, <k2>]\n"
+            "\td <k>  -- Delete key <k> and its associated value.\n"
+            "\tx -- Destroy the whole tree.  Start again with an empty tree of the same order.\n"
+            "\tt -- Print the B+ tree.\n"
+            "\tl -- Print the keys of the leaves (bottom row of the tree).\n"
+            "\tv -- Toggle output of pointer addresses (\"verbose\") in tree and leaves.\n"
+            "\tq -- Quit. (Or use Ctl-D.)\n"
+            "\t? -- Print this help message.\n");
 }
 
 
 /* Helper function for printing the
  * tree out.  See print_tree.
  */
-node * dequeue( void ) {
-    node * n = queue;
-    queue = queue->next;
-    n->next = NULL;
-    return n;
+
+void enqueue(offset_t new_node, int rank) {
+    pageNode * c;
+
+    pageNode * new = (pageNode *)sizeof(pageNode);
+    if (queue == NULL) {
+        // Create new node and set queue to new node
+        new->height = rank;
+        new->page = new_node;
+        new->nextNode = NULL;
+
+        queue = new;
+    }
+}
+
+/* Helper function for printing the
+ * tree out.  See print_tree.
+ */
+offset_t dequeue(int * rank) {
+    pageNode * n = queue;
+    queue = queue->nextNode;
+
+    offset_t temp = n->page;
+    
+    if (rank != 0)
+        *rank = n->height;
+
+    n->nextNode = NULL;
+
+    return temp;
 }
 
 
@@ -149,17 +169,60 @@ void print_leaves( node * root ) {
     }
     printf("\n");
 }
+void printLeaves(offset_t root) {
+    int i;
+    offset_t c = root;
+    keyNum numKeys;
+
+    if (root == 0) {
+        printf("Empty tree.\n");
+        return;
+    }
+    page_t page;
+    file_read_page(c, &page);
+    while(!isLeaf(&page)) {
+        c = getEntryOffset(&page, 0);
+        file_read_page(c, &page);
+    }
+    numKeys = getNumKeys(&page);
+    while (true) {
+        for (i = 0; i < numKeys; i++) {
+            printf("%ld ", getKey(&page, i));
+        }
+        if (getEntryOffset(&page, LEAF_ORDER-1) != 0) {
+            printf("| ");
+            c = getEntryOffset(&page, LEAF_ORDER-1);
+            file_read_page(c, &page);
+        }
+        else {
+            break;
+        }
+        
+    }
+    printf("\n");
+}
 
 
 /* Utility function to give the height
  * of the tree, which length in number of edges
  * of the path from the root to any leaf.
  */
-int height( node * root ) {
+int _height( node * root ) {
     int h = 0;
     node * c = root;
     while (!c->is_leaf) {
         c = c->pointers[0];
+        h++;
+    }
+    return h;
+}
+int height(offset_t root) {
+    int h = 0;
+    page_t rootPage;
+    file_read_page(root, &rootPage);
+
+    while(!isLeaf(&rootPage)) {
+        offset_t next = getEntryOffset(&rootPage, 0);
         h++;
     }
     return h;
@@ -189,45 +252,36 @@ int path_to_root( node * root, node * child ) {
  * to the keys also appear next to their respective
  * keys, in hexadecimal notation.
  */
-void print_tree( node * root ) {
 
-    node * n = NULL;
+void printTree(offset_t root) {
+    page_t page;
+    offset_t offset;
     int i = 0;
     int rank = 0;
     int new_rank = 0;
 
-    if (root == NULL) {
+    if (root == 0) {
         printf("Empty tree.\n");
         return;
     }
+
     queue = NULL;
-    enqueue(root);
+    enqueue(root, rank);
     while( queue != NULL ) {
-        n = dequeue();
-        if (n->parent != NULL && n == n->parent->pointers[0]) {
-            new_rank = path_to_root( root, n );
-            if (new_rank != rank) {
-                rank = new_rank;
-                printf("\n");
-            }
+        offset = dequeue(&new_rank);
+        file_read_page(offset, &page);
+        if (rank < new_rank){
+            putchar('\n');
+            rank = new_rank;
         }
-        if (verbose_output) 
-            printf("(%lx)", (unsigned long)n);
-        for (i = 0; i < n->num_keys; i++) {
-            if (verbose_output)
-                printf("%lx ", (unsigned long)n->pointers[i]);
-            printf("%d ", n->keys[i]);
+
+        for (i = 0; i < getNumKeys(&page); i++) {
+            printf("%ld ", getKey(&page, i));
         }
-        if (!n->is_leaf)
-            for (i = 0; i <= n->num_keys; i++)
-                enqueue(n->pointers[i]);
-        if (verbose_output) {
-            if (n->is_leaf) 
-                printf("%lx ", (unsigned long)n->pointers[order - 1]);
-            else
-                printf("%lx ", (unsigned long)n->pointers[n->num_keys]);
-        }
-        printf("| ");
+        if (!isLeaf(&page))
+            for (i = 0; i <= getNumKeys(&page); i++)
+                enqueue(getEntryOffset(&page, i), new_rank + 1);
+        
     }
     printf("\n");
 }
@@ -244,7 +298,17 @@ void find_and_print(node * root, int key, bool verbose) {
         printf("Record at %lx -- key %d, value %s.\n",
                 (unsigned long)r, key, r->value);
 }
-
+void findAndPrint(offset_t root, keyNum key) {
+    Record * r = findRecord(root, key);
+    if (r == NULL)
+        printf("Record not found under the key %ld.\n", key);
+    else
+    {
+        printf("Record at %lx -- key %ld, value %s.\n",
+                    (unsigned long)r, key, r->value);
+    }
+    
+}
 
 /* Finds and prints the keys, pointers, and values within a range
  * of keys between key_start and key_end, including both bounds.
@@ -1158,7 +1222,7 @@ keyNum getNeighborIndex(offset_t n) {
         i++;
     }
     if(i!=0)
-        return getOffset(&neighbor, i-1);
+        return getEntryOffset(&neighbor, i-1);
     else{
         c = getParentPageNum(&neighbor);
         while(c != 0){
@@ -1409,29 +1473,46 @@ node * coalesce_nodes(node * root, node * n, node * neighbor, int neighbor_index
     free(n); 
     return root;
 }
-offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbor_index, int k_prime) {
+offset_t coalesceNodes(offset_t root, offset_t n) {
+    // Coalesce the pages when one page no longer has any entries
+
     // Note: n= node we are deleting
-    int i, j, neighbor_insertion_index, n_end;
+    int i, j;
+    page_t freePage;
     keyNum numKeys;
-    page_t freePage, parentPage, tmp, neighborPage;
-    offset_t parentOffset;
+    offset_t k_prime, k_prime_index;
+    char tempVal[120];
     
     // Initialize pages
     file_read_page(n, &freePage);
-    parentOffset = getParentPageNum(&freePage);
-    file_read_page(parentOffset, &parentPage);
-    file_read_page(neighbor, &neighborPage);
+    offset_t parentPageNum = getParentPageNum(&freePage);
+    
+    if (parentPageNum == 0) {
+        // This means that the deletion page is the root, so we adjust
+        return adjustRoot(root);
+    }
 
-    //TODO: add when parent offset = 0
+    // Else, read the parent offset and coalesce
+    page_t parentPage;
+    file_read_page(parentPageNum, &parentPage);
 
     /* Swap neighbor with node if node is on the
      * extreme left and neighbor is to its right.
      */
 
+    offset_t neighbor_index = getNeighborIndex(n);
+    page_t neighborPage;
+    
+
     if (neighbor_index == -1) {
         // Switch neighbor and n
         file_write_page(n, &neighborPage);
-        file_write_page(neighbor, &freePage);
+        file_write_page(neighbor_index, &freePage);
+        
+        k_prime_index = 0;
+    }
+    else {
+        k_prime_index = neighbor_index;
     }
 
     /* Starting point in the neighbor for copying
@@ -1441,8 +1522,11 @@ offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbo
      */
 
     file_read_page(n, &freePage);
-    file_read_page(neighbor, &neighborPage);
-    neighbor_insertion_index = getNumKeys(&neighborPage);
+    file_read_page(neighbor_index, &neighborPage);
+    offset_t neighbor_insertion_index = getNumKeys(&neighborPage);
+
+    // Initialize k_prime
+    k_prime = parentPage.node.entries[k_prime_index].key;
 
     /* Case:  nonleaf node.
      * Append k_prime and the following pointer.
@@ -1450,19 +1534,20 @@ offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbo
      */
 
     if (!isLeaf(&freePage)) {
+        // Is an internal page
 
         /* Append k_prime.
          */
         setKey(&neighborPage, k_prime, neighbor_insertion_index);
         setNumKeys(&neighborPage, getNumKeys(&neighborPage) + 1);
 
-        n_end = getNumKeys(&freePage);
+        offset_t n_end = getNumKeys(&freePage);
 
         keyNum numKeysNeighbor = getNumKeys(&neighborPage);
         keyNum numKeysFreePage = n_end;
         for (i = neighbor_insertion_index + 1, j = 0; j < n_end; i++, j++) {
             setKey(&neighborPage, getKey(&freePage, j), i);
-            char tempVal[120];
+            //char tempVal[120];
             copyRecord(&freePage, j, tempVal);
             setRecordValue(&neighborPage, tempVal, i);
             setNumKeys(&neighborPage, ++numKeysNeighbor);
@@ -1474,7 +1559,8 @@ offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbo
          * one more than the number of keys.
          */
         
-        char tempVal[120];
+        //char tempVal[120];
+        page_t tmp;
         copyRecord(&freePage, j, tempVal);
         setRecordValue(&neighborPage, tempVal, i);
         /* All children must now point up to the same parent.
@@ -1482,7 +1568,7 @@ offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbo
 
         for (i = 0; i < getNumKeys(&neighborPage) + 1; i++) {
             file_read_page(neighborPage.node.entries[i].page, &tmp);
-            setParentPageNum(&tmp, neighbor);
+            setParentPageNum(&tmp, neighbor_index);
             file_write_page(neighborPage.node.entries[i].page, &tmp);
         }
     }
@@ -1497,19 +1583,19 @@ offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbo
         int numKeysNeighbor = getNumKeys(&neighborPage);
         for (i = neighbor_insertion_index, j = 0; j < getNumKeys(&freePage); i++, j++) {
             setKey(&neighborPage, getKey(&freePage, j), i);
-            char tempVal[120];
+            //char tempVal[120];
             copyRecord(&freePage, j, tempVal);
             setRecordValue(&neighborPage, tempVal, i);
             setNumKeys(&neighborPage, ++numKeysNeighbor);
 
         }
-        char tempVal[120];
+        //char tempVal[120];
         copyRecord(&freePage, INTERNAL_ORDER - 1, tempVal);
         setRecordValue(&neighborPage, tempVal, INTERNAL_ORDER-1);
     }
 
     //TODO: check logic of this code
-    Record * record = makeRecord(k_prime, n);
+    Record * record = makeRecord(k_prime, tempVal);
     root = deleteEntry(root, getParentPageNum(&freePage), record);
  
     return root;
@@ -1717,7 +1803,21 @@ node * _delete(node * root, int key) {
 offset_t delete(keyNum key) {
     file_read_page(0, &header);
 
-    offset_t root = deleteEntry(getRootPageOffset(&header), key);
+    offset_t root = deleteRecord(getRootPageOffset(&header), key);
+
+    if (root != -1) {
+        // Update header page
+        file_read_page(0, &header);
+
+        setRootPageOffset(&header, root);
+
+        file_write_page(0, &header);
+
+        printf("Deleted the record at key: %ld\n", key);
+
+        return 1;
+    }
+    return 0;
 }
 
 

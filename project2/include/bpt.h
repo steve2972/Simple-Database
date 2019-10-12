@@ -66,6 +66,12 @@ typedef struct node {
     int num_keys;
     struct node * next; // Used for queue.
 } node;
+
+typedef struct pageNode {
+    pagenum_t page;
+    int height;
+    struct pageNode * nextNode;
+} pageNode;
 // GLOBALS.
 /* The order determines the maximum and minimum
  * number of entries (keys and pointers) in any
@@ -83,7 +89,7 @@ extern int order;
  * printing each entire rank on a separate
  * line, finishing with the leaves.
  */
-extern node * queue;
+extern pageNode * queue;
 /* The user can toggle on and off the "verbose"
  * property, which causes the pointer addresses
  * to be printed out in hexadecimal notation
@@ -93,13 +99,23 @@ extern bool verbose_output;
 // FUNCTION PROTOTYPES.
 // Output and utility.
 
-void enqueue( node * new_node );
-node * dequeue( void );
-int height( node * root );
+void usage(void);
+
+void enqueue(offset_t new_node, int rank);
+
+node * _dequeue( void );
+offset_t dequeue(int * rank);
+
+int _height( node * root );
+int height(offset_t root);
+
 int path_to_root( node * root, node * child );
 void print_leaves( node * root );
-void print_tree( node * root );
-void find_and_print(node * root, int key, bool verbose); 
+void printLeaves(offset_t root);
+void printTree(offset_t root);
+
+void find_and_print(node * root, int key, bool verbose);
+void findAndPrint(offset_t root, keyNum key);
 void find_and_print_range(node * root, int range1, int range2, bool verbose); 
 int find_range( node * root, int key_start, int key_end, bool verbose,
         int returned_keys[], void * returned_pointers[]); 
@@ -164,7 +180,7 @@ node * adjust_root(node * root);
 offset_t adjustRoot(offset_t root);
 
 node * coalesce_nodes(node * root, node * n, node * neighbor, int neighbor_index, int k_prime);
-offset_t coalesceNodes(offset_t root, offset_t n, offset_t neighbor, int neighbor_index, int k_prime);
+offset_t coalesceNodes(offset_t root, offset_t n);
 
 node * redistribute_nodes(node * root, node * n, node * neighbor, int neighbor_index, int k_prime_index, int k_prime);
 // Do not need redistributeNodes!!!

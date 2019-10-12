@@ -1,17 +1,8 @@
 #include "dbm.h"
 
-pagenum_t root;
-
 // Database IO
 
 int open_table(char* pathname) {
-    /* Opens/creates file with name pathname
-     * @param[out]: 1 if new file, 0 if existing file
-     * 
-     * Note: The following command automatically sets the external int file
-     * to point at the existing database; no other calls to the file is
-     * necessary.
-     */
     openDB(pathname);
     
 }
@@ -22,11 +13,21 @@ int db_insert(int64_t key, char* value) {
     return 0;
 }
 int db_find(int64_t key) {
-    pagenum_t pagenum = findLeaf(getRootPageOffset(&header), key);
-    return pagenum;
+    findAndPrint(getRootPageOffset(&header), key);
+    return 1;
 }
 int db_delete(int64_t key) {
-    return 0;
+    delete(key);
+    return 1;
 }
+int db_print() {
+    printTree(getRootPageOffset(&header));
+    return 1;
+}
+int db_print_leaves() {
+    printLeaves(getRootPageOffset(&header));
+    return 1;
+}
+
 
 // INSERTION
