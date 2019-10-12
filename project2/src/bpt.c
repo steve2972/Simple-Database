@@ -89,18 +89,16 @@ bool verbose_output = false;
 
 void usage(void) {
     printf( "Enter any of the following commands after the prompt > :\n"
-            "\ti <k>  -- Insert <k> (an integer) as both key and value).\n"
+            "\ti <k> <s>  -- Insert <k> (an integer) as a key and <s> as the value.\n"
             "\tf <k>  -- Find the value under key <k>.\n"
-            "\tp <k> -- Print the path from the root to key k and its associated value.\n"
             "\tr <k1> <k2> -- Print the keys and values found in the range [<k1>, <k2>]\n"
             "\td <k>  -- Delete key <k> and its associated value.\n"
             "\tx -- Destroy the whole tree.  Start again with an empty tree of the same order.\n"
             "\tt -- Print the B+ tree.\n"
             "\tl -- Print the keys of the leaves (bottom row of the tree).\n"
-            "\tv -- Toggle output of pointer addresses (\"verbose\") in tree and leaves.\n"
-            "\tq -- Quit. (Or use Ctl-D.)\n"
+            "\tq -- Quit. (Or use Ctl-C.)\n"
             "\t? -- Print this help message.\n");
-}
+} 
 
 
 /* Helper function for printing the
@@ -110,7 +108,7 @@ void usage(void) {
 void enqueue(offset_t new_node, int rank) {
     pageNode * c;
 
-    pageNode * new = (pageNode *)sizeof(pageNode);
+    pageNode * new = (pageNode *)malloc(sizeof(pageNode));
     if (queue == NULL) {
         // Create new node and set queue to new node
         new->height = rank;
@@ -189,9 +187,9 @@ void printLeaves(offset_t root) {
         for (i = 0; i < numKeys; i++) {
             printf("%ld ", getKey(&page, i));
         }
-        if (getEntryOffset(&page, LEAF_ORDER-1) != 0) {
+        if (getEntryOffset(&page, LEAF_ORDER) != 0) {
             printf("| ");
-            c = getEntryOffset(&page, LEAF_ORDER-1);
+            c = getEntryOffset(&page, LEAF_ORDER);
             file_read_page(c, &page);
         }
         else {
@@ -298,14 +296,16 @@ void find_and_print(node * root, int key, bool verbose) {
         printf("Record at %lx -- key %d, value %s.\n",
                 (unsigned long)r, key, r->value);
 }
-void findAndPrint(offset_t root, keyNum key) {
+int findAndPrint(offset_t root, keyNum key) {
     Record * r = findRecord(root, key);
-    if (r == NULL)
+    if (r == NULL) {
         printf("Record not found under the key %ld.\n", key);
-    else
-    {
+        return -1;
+    }
+    else {
         printf("Record at %lx -- key %ld, value %s.\n",
                     (unsigned long)r, key, r->value);
+        return 0;
     }
     
 }
@@ -405,7 +405,7 @@ pagenum_t findLeaf(pagenum_t root, keyNum key) {
         }
         else {
             int index = getIndex(&page, key);
-            if (index == -1) {
+            if (index > INTERNAL_ORDER | index < 0) {
                 // Index not in the internal page
                 return -1;
             } 
@@ -696,7 +696,7 @@ offset_t insertIntoLeafAfterSplitting(offset_t root, offset_t leaf, Record * rec
         setNumKeys(&leafPage, temp);
     }
     temp = 0;
-    for (i = split, j = 0; i < order; i++, j++) {
+    for (i = split, j = 0; i < LEAF_ORDER; i++, j++) {
         setRecordValue(&newLeafPage, temp_records[i], j);
         setKey(&newLeafPage, temp_keys[i], j);
         temp++;
@@ -704,7 +704,7 @@ offset_t insertIntoLeafAfterSplitting(offset_t root, offset_t leaf, Record * rec
     }
 
 
-    setSiblingOffset(&newLeafPage, getEntryOffset(&leafPage, LEAF_ORDER-1), LEAF_ORDER-1);
+    setSiblingOffset(&newLeafPage, getEntryOffset(&leafPage, LEAF_ORDER), LEAF_ORDER-1);
     setSiblingOffset(&leafPage, newLeafOffset, LEAF_ORDER-1);
 
     for (i = getNumKeys(&leafPage); i < LEAF_ORDER-1; i++) {
@@ -881,7 +881,7 @@ offset_t insertIntoNodeAfterSplitting(offset_t root, offset_t parent, int left_i
     k_prime = temp_keys[split - 1];
     keys = 0;
 
-    for (++i, j = 0; i < order; i++, j++) {
+    for (++i, j = 0; i < INTERNAL_ORDER; i++, j++) {
         setSiblingOffset(&newNode, j, temp_pointers[i]);
         setKey(&newNode, j, temp_keys[i]);
         keys++;

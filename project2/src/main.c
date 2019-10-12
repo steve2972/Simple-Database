@@ -15,18 +15,11 @@ int main( int argc, char ** argv ) {
             break;
         case 'i':
             scanf("%ld %s", &key, input);
+            db_insert(key, input);
             break;
         case 'f':
             scanf("%ld", &key);
             db_find(key);
-        case 'r':
-            scanf("%d %d", &input, &range2);
-            if (input > range2) {
-                int tmp = range2;
-                range2 = input;
-                input = tmp;
-            }
-            find_and_print_range(root, input, range2, instruction == 'p');
             break;
         case 'l':
             db_print_leaves();

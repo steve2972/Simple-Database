@@ -115,7 +115,7 @@ void printLeaves(offset_t root);
 void printTree(offset_t root);
 
 void find_and_print(node * root, int key, bool verbose);
-void findAndPrint(offset_t root, keyNum key);
+int findAndPrint(offset_t root, keyNum key);
 void find_and_print_range(node * root, int range1, int range2, bool verbose); 
 int find_range( node * root, int key_start, int key_end, bool verbose,
         int returned_keys[], void * returned_pointers[]); 
