@@ -322,7 +322,7 @@ int getIndex(page_t * page, keyNum key) {
         
         int max = 0, maxIndex = -1;
         for(int i = 0; i < INTERNAL_ORDER-1; i++) {
-            if (((const NodePage *)page)->entries[i].key < key && ((const NodePage *)page)->entries[i].key > max) {
+            if (((const NodePage *)page)->entries[i].key <= key && ((const NodePage *)page)->entries[i].key > max) {
                 max = ((const NodePage *)page)->entries[i].key;
                 maxIndex = i;
             }

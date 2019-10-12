@@ -709,11 +709,11 @@ offset_t insertIntoLeafAfterSplitting(offset_t root, offset_t leaf, Record * rec
 
     for (i = getNumKeys(&leafPage); i < LEAF_ORDER-1; i++) {
         setKey(&leafPage, 0, i);
-        setRecordValue(&leafPage, "", 0);
+        setRecordValue(&leafPage, "", i);
     }
     for (i = getNumKeys(&newLeafPage); i < LEAF_ORDER-1; i++) {
         setKey(&newLeafPage, 0, i);
-        setRecordValue(&newLeafPage, "", 0);
+        setRecordValue(&newLeafPage, "", i);
     }
 
     new_key = getKey(&newLeafPage, 0);
