@@ -182,8 +182,8 @@ void printLeaves(offset_t root) {
         c = getEntryOffset(&page, 0);
         file_read_page(c, &page);
     }
-    numKeys = getNumKeys(&page);
     while (true) {
+        numKeys = getNumKeys(&page);
         for (i = 0; i < numKeys; i++) {
             printf("%ld ", getKey(&page, i));
         }

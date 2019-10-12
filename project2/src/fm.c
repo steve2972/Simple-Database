@@ -54,6 +54,9 @@ offset_t createInternalPage() {
 
     file_read_page(offset, &internal);
 
+    setFreePageOffset(&header, getNextFreePage(&internal));
+    file_write_page(0, &header);
+
     memset(&internal, 0, PAGE_SIZE);
 
     PageHeader header;
@@ -314,11 +317,18 @@ int getIndex(page_t * page, keyNum key) {
 
     // Case 1: Internal Page
     if (!isLeaf(page)) {
+        if (key > INTERNAL_ORDER - 1 || key < 0)
+            return -1;
+        
+        int max = 0, maxIndex = -1;
         for(int i = 0; i < INTERNAL_ORDER-1; i++) {
-            if (((const NodePage *)page)->entries[i].key == key) {
-                return i;
+            if (((const NodePage *)page)->entries[i].key < key && ((const NodePage *)page)->entries[i].key > max) {
+                max = ((const NodePage *)page)->entries[i].key;
+                maxIndex = i;
             }
         }
+        if (maxIndex >= 0)
+            return maxIndex;
         return -1;      // Failed to find associated key in Internal Page
     }
 

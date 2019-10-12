@@ -25,7 +25,7 @@
 #include <errno.h>
 
 #define INTERNAL_ORDER 249
-#define LEAF_ORDER 32
+#define LEAF_ORDER 4
 #define PAGE_SIZE 4096
 
 extern int file;
