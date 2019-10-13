@@ -18,8 +18,9 @@ int main( int argc, char ** argv ) {
             db_insert(key, input);
             break;
         case 'f':
+            char * ret_val = malloc(sizeof(char) * 120);
             scanf("%ld", &key);
-            db_find(key);
+            db_find(key, ret_val);
             break;
         case 'l':
             db_print_leaves();

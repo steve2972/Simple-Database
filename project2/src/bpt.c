@@ -91,9 +91,7 @@ void usage(void) {
     printf( "Enter any of the following commands after the prompt > :\n"
             "\ti <k> <s>  -- Insert <k> (an integer) as a key and <s> as the value.\n"
             "\tf <k>  -- Find the value under key <k>.\n"
-            "\tr <k1> <k2> -- Print the keys and values found in the range [<k1>, <k2>]\n"
             "\td <k>  -- Delete key <k> and its associated value.\n"
-            "\tx -- Destroy the whole tree.  Start again with an empty tree of the same order.\n"
             "\tt -- Print the B+ tree.\n"
             "\tl -- Print the keys of the leaves (bottom row of the tree).\n"
             "\tq -- Quit. (Or use Ctl-C.)\n"
@@ -296,7 +294,7 @@ void find_and_print(node * root, int key, bool verbose) {
         printf("Record at %lx -- key %d, value %s.\n",
                 (unsigned long)r, key, r->value);
 }
-int findAndPrint(offset_t root, keyNum key) {
+int findAndPrint(offset_t root, keyNum key, char * ret_val) {
     Record * r = findRecord(root, key);
     if (r == NULL) {
         printf("Record not found under the key %ld.\n", key);
@@ -305,6 +303,7 @@ int findAndPrint(offset_t root, keyNum key) {
     else {
         printf("Record at %lx -- key %ld, value %s.\n",
                     (unsigned long)r, key, r->value);
+        strcpy(ret_val, r->value);
         return 0;
     }
     

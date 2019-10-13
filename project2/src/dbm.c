@@ -13,9 +13,10 @@ int db_insert(int64_t key, char* value) {
     Insert(getRootPageOffset(&header), record);
     return 0;
 }
-int db_find(int64_t key) {
-    if (findAndPrint(getRootPageOffset(&header), key) == 0)
+int db_find(int64_t key, char * ret_val) {
+    if (findAndPrint(getRootPageOffset(&header), key, ret_val) == 0) {
         return 0;
+    }
     else
         return -1;
     
