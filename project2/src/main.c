@@ -11,7 +11,7 @@ int main( int argc, char ** argv ) {
         case 'd':
             scanf("%ld", &key);
             db_delete(key);
-            db_print();
+            db_print_leaves();
             break;
         case 'i':
             scanf("%ld %s", &key, input);

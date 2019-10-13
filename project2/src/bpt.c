@@ -1478,7 +1478,7 @@ offset_t coalesceNodes(offset_t root, offset_t n) {
 
     // Note: n= node we are deleting
     int i, j;
-    page_t freePage;
+    page_t freePage, temp;
     keyNum numKeys;
     offset_t k_prime, k_prime_index;
     char tempVal[120];
@@ -1496,34 +1496,6 @@ offset_t coalesceNodes(offset_t root, offset_t n) {
     page_t parentPage;
     file_read_page(parentPageNum, &parentPage);
 
-    /* Swap neighbor with node if node is on the
-     * extreme left and neighbor is to its right.
-     */
-
-    offset_t neighbor_index = getNeighborIndex(n);
-    page_t neighborPage;
-    
-
-    if (neighbor_index == -1) {
-        // Switch neighbor and n
-        file_write_page(n, &neighborPage);
-        file_write_page(neighbor_index, &freePage);
-        
-        k_prime_index = 0;
-    }
-    else {
-        k_prime_index = neighbor_index;
-    }
-
-    /* Starting point in the neighbor for copying
-     * keys and pointers from n.
-     * Recall that n and neighbor have swapped places
-     * in the special case of n being a leftmost child.
-     */
-
-    file_read_page(n, &freePage);
-    file_read_page(neighbor_index, &neighborPage);
-    offset_t neighbor_insertion_index = getNumKeys(&neighborPage);
 
     // Initialize k_prime
     k_prime = parentPage.node.entries[k_prime_index].key;
@@ -1536,41 +1508,30 @@ offset_t coalesceNodes(offset_t root, offset_t n) {
     if (!isLeaf(&freePage)) {
         // Is an internal page
 
-        /* Append k_prime.
-         */
-        setKey(&neighborPage, k_prime, neighbor_insertion_index);
-        setNumKeys(&neighborPage, getNumKeys(&neighborPage) + 1);
-
-        offset_t n_end = getNumKeys(&freePage);
-
-        keyNum numKeysNeighbor = getNumKeys(&neighborPage);
-        keyNum numKeysFreePage = n_end;
-        for (i = neighbor_insertion_index + 1, j = 0; j < n_end; i++, j++) {
-            setKey(&neighborPage, getKey(&freePage, j), i);
-            //char tempVal[120];
-            copyRecord(&freePage, j, tempVal);
-            setRecordValue(&neighborPage, tempVal, i);
-            setNumKeys(&neighborPage, ++numKeysNeighbor);
-            
-            setNumKeys(&freePage, --numKeysFreePage);
-        }
-
+        
+        offset_t offset = getEntryOffset(&freePage, 0);
+        file_read_page(offset, &temp);
         /* The number of pointers is always
          * one more than the number of keys.
          */
         
-        //char tempVal[120];
-        page_t tmp;
-        copyRecord(&freePage, j, tempVal);
-        setRecordValue(&neighborPage, tempVal, i);
-        /* All children must now point up to the same parent.
-         */
+        i = 0;
+        numKeys = getNumKeys(&parentPage);
 
-        for (i = 0; i < getNumKeys(&neighborPage) + 1; i++) {
-            file_read_page(neighborPage.node.entries[i].page, &tmp);
-            setParentPageNum(&tmp, neighbor_index);
-            file_write_page(neighborPage.node.entries[i].page, &tmp);
+        // Find the index of the key we want to delete
+        while (i <= numKeys && n != getEntryOffset(&parentPage, i)) {
+            i++;
         }
+
+        if (i > 0) {
+            setKey(&parentPage, getKey(&temp, 0), i-1);
+        }
+        setEntryOffset(&parentPage, offset, i);
+        setParentPageNum(&temp, offset);
+
+        file_write_page(offset, &parentPage);
+
+
     }
 
     /* In a leaf, append the keys and pointers of
@@ -1580,24 +1541,54 @@ offset_t coalesceNodes(offset_t root, offset_t n) {
      */
 
     else {
-        int numKeysNeighbor = getNumKeys(&neighborPage);
-        for (i = neighbor_insertion_index, j = 0; j < getNumKeys(&freePage); i++, j++) {
-            setKey(&neighborPage, getKey(&freePage, j), i);
-            //char tempVal[120];
-            copyRecord(&freePage, j, tempVal);
-            setRecordValue(&neighborPage, tempVal, i);
-            setNumKeys(&neighborPage, ++numKeysNeighbor);
+        // Page is a leaf
+           /* Swap neighbor with node if node is on the
+            * extreme left and neighbor is to its right.
+            */
+        offset_t neighbor_index = getNeighborIndex(n);
+        page_t neighborPage;
+    
 
+        if (neighbor_index == -1) {
+            // Switch neighbor and n
+            file_write_page(n, &neighborPage);
+            file_write_page(neighbor_index, &freePage);
+        
+            k_prime_index = 0;
         }
-        //char tempVal[120];
-        copyRecord(&freePage, INTERNAL_ORDER - 1, tempVal);
-        setRecordValue(&neighborPage, tempVal, INTERNAL_ORDER-1);
+        else if (neighbor_index != 0){
+            file_read_page(neighbor_index, &neighborPage);
+            setEntryOffset(&neighborPage, getEntryOffset(&freePage, LEAF_ORDER), LEAF_ORDER);
+            file_write_page(neighbor_index, &neighborPage);
+        }
+
+        numKeys = getNumKeys(&parentPage);
+
+        // Same as for internal page -> get the index and delete
+        i = 0;
+        while(i <= numKeys && n != getEntryOffset(&parentPage, i)) {
+            i++;
+        }
+
+        // Start at index j and nudge the keys and values down
+        for (j = i; j < numKeys; ++j) {
+            if (j >= 1)
+                setKey(&parentPage, getKey(&parentPage, j), j-1);
+        }
+        setKey(&parentPage, 0, j -1);
+        setEntryOffset(&parentPage, 0, j);
+
+        setNumKeys(&parentPage, --numKeys);
     }
 
-    //TODO: check logic of this code
-    Record * record = makeRecord(k_prime, tempVal);
-    root = deleteEntry(root, getParentPageNum(&freePage), record);
- 
+    file_write_page(parentPageNum, &parentPage);
+
+    if (numKeys <= 0) {
+        root = coalesceNodes(root, parentPageNum);
+    }
+
+    file_free_page(n);
+
     return root;
 }
 
@@ -1758,7 +1749,10 @@ node * delete_entry( node * root, node * n, int key, void * pointer ) {
         return redistribute_nodes(root, n, neighbor, neighbor_index, k_prime_index, k_prime);
 }
 offset_t deleteEntry(offset_t root, offset_t n, Record * record) {
-    keyNum numKeys = removeEntryFromNode(n, record);
+    offset_t deletionOffset = removeEntryFromNode(n, record);
+    page_t deletionPage;
+    file_read_page(deletionOffset, &deletionPage);
+    keyNum numKeys = getNumKeys(&deletionPage);
 
     if (n == root) {
         return adjustRoot(root);
@@ -1767,6 +1761,8 @@ offset_t deleteEntry(offset_t root, offset_t n, Record * record) {
     if (numKeys < 1) {
         return coalesceNodes(root, n);
     }
+
+    return root;
 }
 
 offset_t deleteRecord(offset_t root, keyNum key) {
