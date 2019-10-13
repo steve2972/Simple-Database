@@ -1558,7 +1558,7 @@ offset_t coalesceNodes(offset_t root, offset_t n) {
         }
         else if (neighbor_index != 0){
             file_read_page(neighbor_index, &neighborPage);
-            setEntryOffset(&neighborPage, getEntryOffset(&freePage, LEAF_ORDER), LEAF_ORDER);
+            setSiblingOffset(&neighborPage, getEntryOffset(&freePage, LEAF_ORDER), LEAF_ORDER - 1);
             file_write_page(neighbor_index, &neighborPage);
         }
 
@@ -1569,7 +1569,7 @@ offset_t coalesceNodes(offset_t root, offset_t n) {
         while(i <= numKeys && n != getEntryOffset(&parentPage, i)) {
             i++;
         }
-
+        
         // Start at index j and nudge the keys and values down
         for (j = i; j < numKeys; ++j) {
             if (j >= 1)
