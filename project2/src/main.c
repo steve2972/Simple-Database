@@ -5,6 +5,7 @@ int main( int argc, char ** argv ) {
     char instruction;
     keyNum key;
     char input[120];
+    char * ret_val = (char *)malloc(sizeof(char) * 120);
     printf("> ");
     while (scanf("%c", &instruction) != EOF) {
         switch (instruction) {
@@ -18,7 +19,6 @@ int main( int argc, char ** argv ) {
             db_insert(key, input);
             break;
         case 'f':
-            char * ret_val = malloc(sizeof(char) * 120);
             scanf("%ld", &key);
             db_find(key, ret_val);
             break;
