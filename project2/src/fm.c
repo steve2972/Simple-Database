@@ -83,16 +83,19 @@ offset_t createLeafPage() {
     offset_t offset = file_alloc_page();
 
     file_read_page(offset, &leaf);
+    // Get the next Free page and assign it to header
+    setFreePageOffset(&header, getNextFreePage(&leaf));
+    file_write_page(0, &header);
 
     memset(&leaf, 0, PAGE_SIZE);
 
-    PageHeader header;
-    header.isLeaf = 1;
-    header.NumKeys = 0;
-    header.ParentPageNum = 0;
-    header.sibling = 0;
+    PageHeader pageHeader;
+    pageHeader.isLeaf = 1;
+    pageHeader.NumKeys = 0;
+    pageHeader.ParentPageNum = 0;
+    pageHeader.sibling = 0;
 
-    leaf.node.header = header;
+    leaf.node.header = pageHeader;
 
     for (int i = 0; i < LEAF_ORDER-1; i++) {
         setKey(&leaf, 0, i);
