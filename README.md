@@ -47,4 +47,4 @@ db_find(int64_t key);
 db_delete(int64_t key);
 ```
 
-For more information on how this program works, please check my [Wiki](https://hconnect.hanyang.ac.kr/2019_ITE2038_12230/2019_ITE2038_2016054148/wikis/milestone-2)
+For more information on how this program works, please check my [Wiki](https://github.com/steve2972/Simple-Database/wiki/Project-2-Description)
